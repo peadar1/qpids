@@ -424,3 +424,303 @@ def delete_match(supabase: Client, match_id: str) -> bool:
     """Delete a match."""
     supabase.table('matches').delete().eq('id', match_id).execute()
     return True
+
+
+# ===================================
+# PARTICIPANT USER OPERATIONS
+# ===================================
+
+def get_participant_user_by_id(supabase: Client, user_id: str) -> Optional[Dict]:
+    """
+    Get a participant user by ID.
+
+    Args:
+        supabase: Supabase client instance.
+        user_id: The UUID of the participant user.
+
+    Returns:
+        Participant user data as a dictionary, or None if not found.
+    """
+    try:
+        response = supabase.table('participant_users').select('*').eq('id', user_id).single().execute()
+        return response.data
+    except APIError as e:
+        logger.debug(f"Participant user not found for id {user_id}: {e}")
+        return None
+
+
+def get_participant_user_by_email(supabase: Client, email: str) -> Optional[Dict]:
+    """
+    Get a participant user by email.
+
+    Args:
+        supabase: Supabase client instance.
+        email: Email address to look up.
+
+    Returns:
+        Participant user data as a dictionary, or None if not found.
+    """
+    try:
+        response = supabase.table('participant_users').select('*').ilike('email', email).single().execute()
+        return response.data
+    except APIError as e:
+        logger.debug(f"Participant user not found for email {email}: {e}")
+        return None
+
+
+def get_participant_user_by_supabase_auth_id(supabase: Client, auth_id: str) -> Optional[Dict]:
+    """
+    Get a participant user by Supabase Auth ID.
+
+    Args:
+        supabase: Supabase client instance.
+        auth_id: Supabase Auth user ID.
+
+    Returns:
+        Participant user data as a dictionary, or None if not found.
+    """
+    try:
+        response = supabase.table('participant_users').select('*').eq('supabase_auth_id', auth_id).single().execute()
+        return response.data
+    except APIError as e:
+        logger.debug(f"Participant user not found for supabase_auth_id {auth_id}: {e}")
+        return None
+
+
+def create_participant_user(supabase: Client, user_data: Dict) -> Dict:
+    """
+    Create a new participant user.
+
+    Args:
+        supabase: Supabase client instance.
+        user_data: Dictionary containing user data (email, name, etc.).
+
+    Returns:
+        The created participant user data.
+    """
+    # Convert date_of_birth to string if it's a date object
+    date_of_birth = user_data.get('date_of_birth')
+    if date_of_birth and hasattr(date_of_birth, 'isoformat'):
+        date_of_birth = date_of_birth.isoformat()
+
+    user_insert = {
+        'email': user_data['email'],
+        'name': user_data['name'],
+        'phone_number': user_data.get('phone_number'),
+        'date_of_birth': date_of_birth,
+        'profile_data': user_data.get('profile_data', {}),
+        'supabase_auth_id': user_data.get('supabase_auth_id')
+    }
+
+    supabase.table('participant_users').insert(user_insert).execute()
+    return get_participant_user_by_email(supabase, user_data['email'])
+
+
+def update_participant_user(supabase: Client, user_id: str, user_update: Dict) -> Optional[Dict]:
+    """
+    Update a participant user.
+
+    Args:
+        supabase: Supabase client instance.
+        user_id: UUID of the participant user to update.
+        user_update: Dictionary containing fields to update.
+
+    Returns:
+        Updated participant user data, or None if not found.
+    """
+    update_data = {}
+    for k, v in user_update.items():
+        if v is not None:
+            if hasattr(v, 'isoformat'):
+                v = v.isoformat()
+            update_data[k] = v
+
+    supabase.table('participant_users').update(update_data).eq('id', user_id).execute()
+    return get_participant_user_by_id(supabase, user_id)
+
+
+def delete_participant_user(supabase: Client, user_id: str) -> bool:
+    """
+    Delete a participant user.
+
+    Args:
+        supabase: Supabase client instance.
+        user_id: UUID of the participant user to delete.
+
+    Returns:
+        True if deletion was successful.
+    """
+    supabase.table('participant_users').delete().eq('id', user_id).execute()
+    return True
+
+
+# ===================================
+# PUBLIC EVENT OPERATIONS
+# ===================================
+
+def get_public_events(supabase: Client, area: Optional[str] = None) -> List[Dict]:
+    """
+    Get all public events, optionally filtered by area.
+
+    Args:
+        supabase: Supabase client instance.
+        area: Optional area filter.
+
+    Returns:
+        List of public events with participant counts.
+    """
+    query = supabase.table('events').select('*').eq('visibility', 'public').eq('status', 'registration_open')
+
+    if area:
+        query = query.ilike('area', f'%{area}%')
+
+    response = query.order('event_date').execute()
+    events = response.data
+
+    # Add participant counts
+    for event in events:
+        p_response = supabase.table('participants').select('id', count='exact').eq('event_id', event['id']).execute()
+        event['participant_count'] = p_response.count or 0
+
+    return events
+
+
+def get_event_by_access_code(supabase: Client, access_code: str) -> Optional[Dict]:
+    """
+    Get an event by its access code.
+
+    Args:
+        supabase: Supabase client instance.
+        access_code: The unique access code for the event.
+
+    Returns:
+        Event data if found and valid, None otherwise.
+    """
+    try:
+        response = supabase.table('events').select('*').eq('access_code', access_code).single().execute()
+        return response.data
+    except APIError as e:
+        logger.debug(f"Event not found for access code {access_code}: {e}")
+        return None
+
+
+def get_participant_registrations(supabase: Client, participant_user_id: str) -> List[Dict]:
+    """
+    Get all event registrations for a participant user.
+
+    Args:
+        supabase: Supabase client instance.
+        participant_user_id: UUID of the participant user.
+
+    Returns:
+        List of event registrations with event details.
+    """
+    response = supabase.table('participants').select('*').eq('participant_user_id', participant_user_id).execute()
+    registrations = response.data
+
+    # Enrich with event details and match counts
+    for reg in registrations:
+        event = get_event_by_id(supabase, reg['event_id'])
+        if event:
+            reg['event_name'] = event['name']
+            reg['event_date'] = event['event_date']
+            reg['event_status'] = event['status']
+
+        # Get match count for this participant
+        m_response = supabase.table('matches').select('id', count='exact').or_(
+            f"participant1_id.eq.{reg['id']},participant2_id.eq.{reg['id']}"
+        ).execute()
+        reg['match_count'] = m_response.count or 0
+
+    return registrations
+
+
+def get_participant_matches(supabase: Client, participant_user_id: str) -> List[Dict]:
+    """
+    Get all matches for a participant user across all events.
+
+    Args:
+        supabase: Supabase client instance.
+        participant_user_id: UUID of the participant user.
+
+    Returns:
+        List of matches with partner details and event info.
+    """
+    # First get all participant registrations for this user
+    reg_response = supabase.table('participants').select('id, event_id, name').eq(
+        'participant_user_id', participant_user_id
+    ).execute()
+    registrations = reg_response.data
+
+    if not registrations:
+        return []
+
+    all_matches = []
+
+    for reg in registrations:
+        participant_id = reg['id']
+        event_id = reg['event_id']
+
+        # Get matches where this participant is either participant1 or participant2
+        matches_response = supabase.table('matches').select('*').eq('event_id', event_id).or_(
+            f"participant1_id.eq.{participant_id},participant2_id.eq.{participant_id}"
+        ).execute()
+
+        for match in matches_response.data:
+            # Determine who the matched partner is
+            if match['participant1_id'] == participant_id:
+                partner_id = match['participant2_id']
+            else:
+                partner_id = match['participant1_id']
+
+            # Get partner details
+            partner = get_participant_by_id(supabase, partner_id)
+            if not partner:
+                continue
+
+            # Get event details
+            event = get_event_by_id(supabase, event_id)
+            event_name = event['name'] if event else 'Unknown Event'
+
+            # Get venue details if assigned
+            venue_name = None
+            venue_address = None
+            if match.get('venue_id'):
+                venue = get_venue_by_id(supabase, match['venue_id'])
+                if venue:
+                    venue_name = venue['name']
+                    venue_address = venue.get('address')
+
+            all_matches.append({
+                'id': match['id'],
+                'event_id': event_id,
+                'event_name': event_name,
+                'match_name': partner['name'],
+                'match_email': partner.get('email'),
+                'match_phone': partner.get('phone_number'),
+                'compatibility_score': match['compatibility_score'],
+                'status': match['status'],
+                'venue_name': venue_name,
+                'venue_address': venue_address,
+                'matched_at': match['created_at']
+            })
+
+    return all_matches
+
+
+def link_participant_to_user(supabase: Client, participant_id: str, participant_user_id: str) -> Optional[Dict]:
+    """
+    Link an existing participant registration to a participant user account.
+
+    Args:
+        supabase: Supabase client instance.
+        participant_id: UUID of the participant registration.
+        participant_user_id: UUID of the participant user account.
+
+    Returns:
+        Updated participant data, or None if not found.
+    """
+    supabase.table('participants').update({
+        'participant_user_id': participant_user_id
+    }).eq('id', participant_id).execute()
+    return get_participant_by_id(supabase, participant_id)

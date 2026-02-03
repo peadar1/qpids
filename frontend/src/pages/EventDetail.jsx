@@ -18,7 +18,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { getEventStatusColor, formatDate } from '../utils/helpers';
-import Header from '../components/Header';
+import Header from '../components/organizer/Header';
 
 export default function EventDetail() {
   const { id } = useParams();
@@ -94,7 +94,7 @@ export default function EventDetail() {
     ) {
       try {
         await eventAPI.delete(id);
-        navigate("/events");
+        navigate("/organizer/events");
       } catch (err) {
         setError("Failed to delete event");
       }
@@ -139,7 +139,7 @@ export default function EventDetail() {
             {error}
           </div>
           <button
-            onClick={() => navigate("/events")}
+            onClick={() => navigate("/organizer/events")}
             className="text-pink-600 hover:text-pink-700 font-semibold"
           >
             ← Back to Events
@@ -157,7 +157,7 @@ export default function EventDetail() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Back Button */}
         <button
-          onClick={() => navigate("/events")}
+          onClick={() => navigate("/organizer/events")}
           className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 font-medium transition-colors"
         >
           <ArrowLeft size={20} />
@@ -396,7 +396,7 @@ export default function EventDetail() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Form Configuration - NOW CLICKABLE */}
           <div 
-            onClick={() => navigate(`/events/${id}/form`)}
+            onClick={() => navigate(`/organizer/events/${id}/form`)}
             className="bg-white rounded-2xl shadow-lg p-8 border-2 border-pink-100 hover:shadow-xl transition-shadow cursor-pointer group"
           >
             <div className="flex items-start justify-between mb-4">
@@ -412,7 +412,7 @@ export default function EventDetail() {
 
           {/* Venue Management - CLICKABLE */}
           <div 
-            onClick={() => navigate(`/events/${id}/venues`)}
+            onClick={() => navigate(`/organizer/events/${id}/venues`)}
             className="bg-white rounded-2xl shadow-lg p-8 border-2 border-purple-100 hover:shadow-xl transition-shadow cursor-pointer group"
           >
             <div className="flex items-start justify-between mb-4">
@@ -430,7 +430,7 @@ export default function EventDetail() {
 
           {/* Matches */}
           <div
-            onClick={() => navigate(`/events/${id}/matches`)}
+            onClick={() => navigate(`/organizer/events/${id}/matches`)}
             className="bg-white rounded-2xl shadow-lg p-8 border-2 border-blue-100 hover:shadow-xl transition-shadow cursor-pointer group"
           >
             <div className="flex items-start justify-between mb-4">
@@ -448,7 +448,7 @@ export default function EventDetail() {
 
           {/* Participants */}
           <div
-            onClick={() => navigate(`/events/${id}/participants`)}
+            onClick={() => navigate(`/organizer/events/${id}/participants`)}
             className="bg-white rounded-2xl shadow-lg p-8 border-2 border-green-100 hover:shadow-xl transition-shadow cursor-pointer group"
           >
             <div className="flex items-start justify-between mb-4">

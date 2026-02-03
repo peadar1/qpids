@@ -282,3 +282,149 @@ class MatchResponse(BaseModel):
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ==================== EVENT VISIBILITY ====================
+
+class EventVisibility(str, Enum):
+    public = "public"
+    private = "private"
+
+
+# ==================== PARTICIPANT USER SCHEMAS ====================
+
+class ParticipantUserBase(BaseModel):
+    """Base schema for participant user accounts."""
+    email: EmailStr
+    name: str = Field(..., min_length=1, max_length=100)
+    phone_number: Optional[str] = Field(None, max_length=20)
+    date_of_birth: Optional[date] = None
+
+
+class ParticipantUserCreate(ParticipantUserBase):
+    """Schema for creating a participant user account."""
+    supabase_auth_id: Optional[str] = None  # For OAuth users
+    password: Optional[str] = Field(None, min_length=8, max_length=100)  # For email/password users
+    profile_data: Optional[dict] = {}
+
+
+class ParticipantUserUpdate(BaseModel):
+    """Schema for updating a participant user account."""
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    phone_number: Optional[str] = Field(None, max_length=20)
+    date_of_birth: Optional[date] = None
+    profile_data: Optional[dict] = None
+
+
+class ParticipantUserResponse(ParticipantUserBase):
+    """Response schema for participant user accounts."""
+    id: str  # UUID from Supabase
+    supabase_auth_id: Optional[str] = None
+    profile_data: Optional[dict] = {}
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ParticipantUserLogin(BaseModel):
+    """Schema for participant email/password login."""
+    email: EmailStr
+    password: str
+
+
+class ParticipantTokenResponse(BaseModel):
+    """Token response for participant authentication."""
+    access_token: str
+    token_type: str = "bearer"
+    participant_user: ParticipantUserResponse
+
+
+# ==================== PUBLIC EVENT BROWSING SCHEMAS ====================
+
+class EventBrowseResponse(BaseModel):
+    """Response schema for public event browsing."""
+    id: str  # UUID from Supabase
+    name: str
+    description: Optional[str] = None
+    event_date: date
+    status: str
+    visibility: str
+    location: Optional[str] = None
+    area: Optional[str] = None
+    participant_count: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class EventAccessCodeRequest(BaseModel):
+    """Request schema for accessing a private event via code."""
+    access_code: str = Field(..., min_length=1, max_length=20)
+
+
+class EventAccessCodeResponse(BaseModel):
+    """Response schema for access code validation."""
+    event_id: str
+    event_name: str
+    valid: bool
+
+
+# ==================== PARTICIPANT MATCH VIEW SCHEMAS ====================
+
+class ParticipantMatchView(BaseModel):
+    """Schema for viewing a match from a participant's perspective."""
+    id: str  # Match UUID
+    event_id: str
+    event_name: str
+    match_name: str  # Name of the person they're matched with
+    match_email: Optional[str] = None  # Email (if sharing is enabled)
+    match_phone: Optional[str] = None  # Phone (if sharing is enabled)
+    compatibility_score: int
+    status: str
+    venue_name: Optional[str] = None
+    venue_address: Optional[str] = None
+    matched_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ParticipantEventView(BaseModel):
+    """Schema for viewing an event from a participant's perspective."""
+    id: str  # Participant registration UUID
+    event_id: str
+    event_name: str
+    event_date: date
+    event_status: str
+    registration_status: str
+    registered_at: datetime
+    match_count: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ==================== EXTENDED EVENT SCHEMAS ====================
+
+class EventCreateExtended(EventCreate):
+    """Extended event creation with visibility options."""
+    visibility: Optional[EventVisibility] = EventVisibility.private
+    access_code: Optional[str] = Field(None, max_length=20)
+    location: Optional[str] = Field(None, max_length=255)
+    area: Optional[str] = Field(None, max_length=100)
+
+
+class EventUpdateExtended(EventUpdate):
+    """Extended event update with visibility options."""
+    visibility: Optional[EventVisibility] = None
+    access_code: Optional[str] = Field(None, max_length=20)
+    location: Optional[str] = Field(None, max_length=255)
+    area: Optional[str] = Field(None, max_length=100)
+
+
+class EventResponseExtended(EventResponse):
+    """Extended event response with visibility fields."""
+    visibility: str = "private"
+    access_code: Optional[str] = None
+    location: Optional[str] = None
+    area: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)

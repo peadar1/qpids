@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Calendar, Users, Sparkles, Heart } from "lucide-react";
 import { eventAPI, participantAPI, matchAPI } from '../services/api';
-import Header from '../components/Header';
+import Header from '../components/organizer/Header';
 
 export default function Dashboard() {
   const { user } = useAuth();

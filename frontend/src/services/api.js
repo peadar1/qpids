@@ -81,5 +81,111 @@ export const matchAPI = {
   generate: (eventId) => api.post(`/api/events/${eventId}/matches/generate`),
 };
 
+// ==================== PARTICIPANT PORTAL API ====================
+
+/**
+ * Create an axios instance that uses a specific token.
+ * Used for participant auth where token might come from Supabase.
+ * @param {string} token - Bearer token to use
+ * @returns {Object} Axios config with auth header
+ */
+const withToken = (token) => ({
+  headers: { Authorization: `Bearer ${token}` }
+});
+
+// Participant Auth API calls
+export const participantAuthAPI = {
+  /**
+   * Sign up with email and password.
+   * @param {Object} data - { name, email, password }
+   */
+  signup: (data) => api.post('/api/participant-auth/signup', data),
+
+  /**
+   * Login with email and password.
+   * @param {Object} data - { email, password }
+   */
+  login: (data) => api.post('/api/participant-auth/login', data),
+
+  /**
+   * Get current participant profile.
+   * Uses provided token (for OAuth) or stored token (for email auth).
+   * @param {string} [token] - Optional bearer token
+   */
+  getMe: (token) => token
+    ? api.get('/api/participant-auth/me', withToken(token))
+    : api.get('/api/participant-auth/me'),
+
+  /**
+   * Update current participant profile.
+   * @param {Object} data - Profile fields to update
+   * @param {string} [token] - Optional bearer token
+   */
+  updateMe: (data, token) => token
+    ? api.put('/api/participant-auth/me', data, withToken(token))
+    : api.put('/api/participant-auth/me', data),
+
+  /**
+   * Delete current participant account.
+   * @param {string} [token] - Optional bearer token
+   */
+  deleteMe: (token) => token
+    ? api.delete('/api/participant-auth/me', withToken(token))
+    : api.delete('/api/participant-auth/me'),
+};
+
+// Public Events API calls (for participant portal)
+export const publicEventAPI = {
+  /**
+   * Browse public events open for registration.
+   * @param {string} [area] - Optional area filter
+   */
+  browse: (area) => api.get('/api/public/events/browse', { params: { area } }),
+
+  /**
+   * Validate a private event access code.
+   * @param {string} accessCode - The access code to validate
+   */
+  validateAccessCode: (accessCode) => api.post('/api/public/events/access-code', {
+    access_code: accessCode
+  }),
+
+  /**
+   * Get public event details.
+   * @param {string} eventId - Event UUID
+   * @param {string} [accessCode] - Optional access code for private events
+   */
+  getEvent: (eventId, accessCode) => api.get(`/api/public/events/${eventId}`, {
+    params: accessCode ? { access_code: accessCode } : {}
+  }),
+
+  /**
+   * Register for an event (supports both auth and anonymous).
+   * @param {string} eventId - Event UUID
+   * @param {Object} data - Registration data
+   * @param {string} [accessCode] - Optional access code for private events
+   */
+  register: (eventId, data, accessCode) => api.post(
+    `/api/public/events/${eventId}/register`,
+    data,
+    { params: accessCode ? { access_code: accessCode } : {} }
+  ),
+
+  /**
+   * Get participant's registered events (requires auth).
+   */
+  getMyEvents: () => api.get('/api/public/events/my-events'),
+
+  /**
+   * Get participant's matches across all events (requires auth).
+   */
+  getMyMatches: () => api.get('/api/public/events/my-matches'),
+
+  /**
+   * Get list of available areas with public events.
+   */
+  getAreas: () => api.get('/api/public/areas'),
+};
+
 // Export the axios instance for direct use if needed
 export default api;

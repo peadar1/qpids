@@ -18,7 +18,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { getMatchStatusColor } from '../utils/helpers';
-import Header from '../components/Header';
+import Header from '../components/organizer/Header';
 
 export default function Matches() {
   const { eventId } = useParams();
@@ -184,7 +184,7 @@ export default function Matches() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Back Button & Header */}
         <button
-          onClick={() => navigate(`/events/${eventId}`)}
+          onClick={() => navigate(`/organizer/events/${eventId}`)}
           className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 font-medium transition-colors"
         >
           <ArrowLeft size={20} />

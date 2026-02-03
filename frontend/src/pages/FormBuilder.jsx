@@ -26,7 +26,7 @@ import {
   Phone,
   Lock
 } from 'lucide-react';
-import Header from '../components/Header';
+import Header from '../components/organizer/Header';
 
 // Question type options with icons
 const QUESTION_TYPES = [
@@ -311,7 +311,7 @@ export default function FormBuilder() {
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Back Button & Header */}
         <button
-          onClick={() => navigate(`/events/${eventId}`)}
+          onClick={() => navigate(`/organizer/events/${eventId}`)}
           className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 font-medium transition-colors"
         >
           <ArrowLeft size={20} />

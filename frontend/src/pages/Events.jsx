@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { eventAPI } from '../services/api';
 import { Plus, Calendar, Users, ArrowRight, Sparkles, Heart } from 'lucide-react';
 import { getEventStatusColor, formatDate } from '../utils/helpers';
-import Header from '../components/Header';
+import Header from '../components/organizer/Header';
 
 export default function Events() {
   const navigate = useNavigate();
@@ -42,7 +42,7 @@ export default function Events() {
           </div>
           
           <button
-            onClick={() => navigate('/events/create')}
+            onClick={() => navigate('/organizer/events/create')}
             className="flex items-center gap-2 bg-gradient-to-r from-pink-500 to-red-500 hover:from-pink-600 hover:to-red-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all"
           >
             <Plus size={20} />
@@ -76,7 +76,7 @@ export default function Events() {
               Get started by creating your first cupid matching event. It only takes a few minutes!
             </p>
             <button
-              onClick={() => navigate('/events/create')}
+              onClick={() => navigate('/organizer/events/create')}
               className="inline-flex items-center gap-2 bg-gradient-to-r from-pink-500 to-red-500 hover:from-pink-600 hover:to-red-600 text-white font-bold py-3 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all"
             >
               <Sparkles size={20} />
@@ -91,7 +91,7 @@ export default function Events() {
             {events.map((event) => (
               <div
                 key={event.id}
-                onClick={() => navigate(`/events/${event.id}`)}
+                onClick={() => navigate(`/organizer/events/${event.id}`)}
                 className="bg-white rounded-2xl shadow-lg hover:shadow-2xl p-6 border-2 border-pink-100 cursor-pointer transition-all hover:scale-[1.02] group"
               >
                 {/* Status Badge */}

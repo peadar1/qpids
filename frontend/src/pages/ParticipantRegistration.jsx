@@ -1,22 +1,29 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { eventAPI, formQuestionAPI, participantAPI } from '../services/api';
-import { 
-  Heart, 
-  Sparkles, 
-  User, 
-  Mail, 
-  Phone, 
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { eventAPI, formQuestionAPI, participantAPI, publicEventAPI } from '../services/api';
+import { useParticipantAuth } from '../context/ParticipantAuthContext';
+import {
+  Heart,
+  Sparkles,
+  User,
+  Mail,
+  Phone,
   Calendar,
   CheckCircle,
   AlertCircle,
-  ArrowRight
+  ArrowRight,
+  LogIn
 } from 'lucide-react';
 
 export default function ParticipantRegistration() {
   const { eventId } = useParams();
   const navigate = useNavigate();
-  
+  const [searchParams] = useSearchParams();
+  const accessCode = searchParams.get('code');
+
+  // Get participant auth context (optional - works for both authenticated and anonymous)
+  const { user: participantUser, isAuthenticated } = useParticipantAuth();
+
   const [event, setEvent] = useState(null);
   const [customQuestions, setCustomQuestions] = useState([]);
   const [disabledStandardFields, setDisabledStandardFields] = useState([]);
@@ -24,7 +31,7 @@ export default function ParticipantRegistration() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
-  
+
   // Standard form fields
   const [formData, setFormData] = useState({
     name: '',
@@ -35,28 +42,48 @@ export default function ParticipantRegistration() {
     interested_in: '',
     bio: '',
   });
-  
+
   // Custom question answers
   const [customAnswers, setCustomAnswers] = useState({});
 
+  // Pre-fill form with authenticated user data
+  useEffect(() => {
+    if (isAuthenticated && participantUser) {
+      setFormData(prev => ({
+        ...prev,
+        name: participantUser.name || prev.name,
+        email: participantUser.email || prev.email,
+        phone: participantUser.phone_number || prev.phone,
+        date_of_birth: participantUser.date_of_birth || prev.date_of_birth,
+      }));
+    }
+  }, [isAuthenticated, participantUser]);
+
   useEffect(() => {
     fetchEventAndQuestions();
-  }, [eventId]);
+  }, [eventId, accessCode]);
 
   const fetchEventAndQuestions = async () => {
     try {
-      const [eventRes, questionsRes] = await Promise.all([
-        eventAPI.getPublic(eventId),
-        formQuestionAPI.getPublic(eventId)
-      ]);
-      
+      // Try to get event - use public endpoint with access code if provided
+      let eventRes;
+      try {
+        // First try the public API endpoint which handles access codes
+        eventRes = await publicEventAPI.getEvent(eventId, accessCode);
+      } catch (publicErr) {
+        // Fall back to standard public endpoint if public API fails
+        eventRes = await eventAPI.getPublic(eventId);
+      }
+
+      const questionsRes = await formQuestionAPI.getPublic(eventId);
+
       setEvent(eventRes.data);
       setCustomQuestions(questionsRes.data);
-      
+
       // Load disabled standard fields from event settings
       const settings = eventRes.data.settings || {};
       setDisabledStandardFields(settings.disabled_standard_fields || []);
-      
+
       // Initialize custom answers
       const initialAnswers = {};
       questionsRes.data.forEach(q => {
@@ -67,15 +94,19 @@ export default function ParticipantRegistration() {
         }
       });
       setCustomAnswers(initialAnswers);
-      
+
       // Check if registration is open
       if (eventRes.data.status !== 'registration_open') {
         setError('Registration is not currently open for this event.');
       }
-      
+
       setLoading(false);
     } catch (err) {
-      setError('Event not found or registration is closed.');
+      if (err.response?.status === 403) {
+        setError('This is a private event. Please use a valid access code.');
+      } else {
+        setError('Event not found or registration is closed.');
+      }
       setLoading(false);
     }
   };
@@ -146,7 +177,8 @@ export default function ParticipantRegistration() {
     }
 
     try {
-      await participantAPI.register(eventId, {
+      // Use the public event API for registration (supports access codes)
+      await publicEventAPI.register(eventId, {
         ...formData,
         // Only include phone if enabled
         phone: isFieldEnabled('phone') ? formData.phone : '',
@@ -154,7 +186,7 @@ export default function ParticipantRegistration() {
         bio: isFieldEnabled('bio') ? formData.bio : '',
         age: age,
         form_answers: customAnswers,
-      });
+      }, accessCode);
       setSubmitted(true);
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to submit registration. Please try again.');

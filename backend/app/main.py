@@ -8,7 +8,9 @@ from .routers import (
     venues_supabase as venues,
     participants_supabase as participants,
     form_questions_supabase as form_questions,
-    matches_supabase as matches
+    matches_supabase as matches,
+    participant_auth,
+    events_public
 )
 
 # Load environment variables
@@ -16,8 +18,8 @@ load_dotenv()
 
 # Create FastAPI app
 app = FastAPI(
-    title="Cupid's Matcher API",
-    description="API for managing college cupids matching events",
+    title="Qpids Matcher API",
+    description="API for managing dating and matchmaking events",
     version="1.0.0"
 )
 
@@ -34,7 +36,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
+# Include routers - Organizer/Matcher routes
 app.include_router(auth.router)
 app.include_router(events.router)
 app.include_router(venues.router)
@@ -42,11 +44,15 @@ app.include_router(participants.router)
 app.include_router(form_questions.router)
 app.include_router(matches.router)
 
+# Include routers - Participant portal routes
+app.include_router(participant_auth.router)
+app.include_router(events_public.router)
+
 
 @app.get("/")
 def read_root():
     return {
-        "message": "Welcome to Cupid's Matcher API",
+        "message": "Welcome to Qpids Matcher API",
         "status": "running",
         "version": "1.0.0"
     }

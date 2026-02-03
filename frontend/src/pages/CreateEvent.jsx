@@ -27,7 +27,7 @@ import {
   ChevronDown,
   AlertCircle
 } from 'lucide-react';
-import Header from '../components/Header';
+import Header from '../components/organizer/Header';
 
 // Question type options
 const QUESTION_TYPES = [
@@ -259,7 +259,7 @@ export default function CreateEvent() {
       }
 
       // Navigate to the event page
-      navigate(`/events/${eventId}`);
+      navigate(`/organizer/events/${eventId}`);
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to create event');
       setLoading(false);
@@ -282,7 +282,7 @@ export default function CreateEvent() {
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Back Button */}
         <button
-          onClick={() => navigate('/events')}
+          onClick={() => navigate('/organizer/events')}
           className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 font-medium transition-colors"
         >
           <ArrowLeft size={20} />
@@ -692,7 +692,7 @@ export default function CreateEvent() {
           {/* Navigation Buttons */}
           <div className="flex justify-between mt-8 pt-6 border-t-2 border-gray-100">
             <button
-              onClick={() => currentStep > 1 ? goToStep(currentStep - 1) : navigate('/events')}
+              onClick={() => currentStep > 1 ? goToStep(currentStep - 1) : navigate('/organizer/events')}
               className="flex items-center gap-2 px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition-colors"
             >
               <ArrowLeft size={18} />
