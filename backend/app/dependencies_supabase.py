@@ -1,5 +1,7 @@
 """Dependencies for Supabase authentication"""
 import logging
+import httpx
+import os
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase import Client
@@ -9,6 +11,48 @@ from .supabase_client import get_supabase_admin, get_supabase_anon
 from typing import Dict, Tuple, Optional
 
 logger = logging.getLogger(__name__)
+
+# Supabase URL for direct API calls
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+
+
+def verify_supabase_token(token: str) -> Optional[Dict]:
+    """
+    Verify a Supabase Auth JWT token by calling the GoTrue API directly.
+
+    This is a fallback method that doesn't rely on the Supabase Python SDK,
+    which may have issues with token verification in certain versions.
+
+    Args:
+        token: The Supabase Auth JWT token to verify.
+
+    Returns:
+        User data dictionary if token is valid, None otherwise.
+    """
+    if not SUPABASE_URL:
+        logger.error("SUPABASE_URL not configured")
+        return None
+
+    try:
+        # Call the Supabase Auth /user endpoint directly
+        auth_url = f"{SUPABASE_URL}/auth/v1/user"
+        response = httpx.get(
+            auth_url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "apikey": os.getenv("SUPABASE_ANON_KEY", "")
+            },
+            timeout=10.0
+        )
+
+        if response.status_code == 200:
+            return response.json()
+        else:
+            logger.warning(f"Supabase auth verification returned {response.status_code}: {response.text}")
+            return None
+    except Exception as e:
+        logger.error(f"Error calling Supabase auth API: {type(e).__name__}: {str(e)}")
+        return None
 
 security = HTTPBearer()
 security_optional = HTTPBearer(auto_error=False)
@@ -120,33 +164,43 @@ def get_current_participant(
 
         participant_user = crud.get_participant_user_by_email(supabase, participant_email)
     else:
-        # Try as Supabase Auth token - use anon client for auth verification
+        # Try as Supabase Auth token - verify using direct API call
         try:
             logger.info(f"Attempting Supabase Auth token verification, token prefix: {token[:20]}...")
-            # Use anon client for verifying user tokens (not service role)
-            supabase_anon = get_supabase_anon()
-            user_response = supabase_anon.auth.get_user(token)
-            logger.info(f"Supabase auth response: {user_response}")
-            if not user_response or not user_response.user:
-                logger.warning("No user in Supabase auth response")
+
+            # Use direct API call to verify token (more reliable than SDK)
+            user_data = verify_supabase_token(token)
+
+            if not user_data:
+                logger.warning("Supabase token verification failed - no user data returned")
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid or expired token",
                     headers={"WWW-Authenticate": "Bearer"},
                 )
 
-            supabase_auth_id = user_response.user.id
-            logger.info(f"Got Supabase user ID: {supabase_auth_id}")
+            supabase_auth_id = user_data.get('id')
+            user_email = user_data.get('email')
+            user_metadata = user_data.get('user_metadata', {})
+
+            if not supabase_auth_id:
+                logger.warning("No user ID in Supabase auth response")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid token - no user ID",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+
+            logger.info(f"Got Supabase user ID: {supabase_auth_id}, email: {user_email}")
             # Use admin client for database operations (bypasses RLS)
             participant_user = crud.get_participant_user_by_supabase_auth_id(supabase, supabase_auth_id)
 
             # If no participant user exists yet, create one from Supabase Auth data
             if not participant_user:
                 logger.info(f"Creating new participant user for Supabase auth ID: {supabase_auth_id}")
-                user_metadata = user_response.user.user_metadata or {}
                 participant_user = crud.create_participant_user(supabase, {
-                    'email': user_response.user.email,
-                    'name': user_metadata.get('full_name') or user_metadata.get('name') or user_response.user.email.split('@')[0],
+                    'email': user_email,
+                    'name': user_metadata.get('full_name') or user_metadata.get('name') or (user_email.split('@')[0] if user_email else 'User'),
                     'supabase_auth_id': supabase_auth_id,
                     'profile_data': user_metadata
                 })
@@ -201,11 +255,10 @@ def get_current_participant_optional(
             if participant_email and user_type == "participant":
                 return crud.get_participant_user_by_email(supabase, participant_email)
         else:
-            # Try Supabase Auth token - use anon client for verification
-            supabase_anon = get_supabase_anon()
-            user_response = supabase_anon.auth.get_user(token)
-            if user_response and user_response.user:
-                return crud.get_participant_user_by_supabase_auth_id(supabase, user_response.user.id)
+            # Try Supabase Auth token - use direct API call for verification
+            user_data = verify_supabase_token(token)
+            if user_data and user_data.get('id'):
+                return crud.get_participant_user_by_supabase_auth_id(supabase, user_data['id'])
     except Exception:
         pass
 
