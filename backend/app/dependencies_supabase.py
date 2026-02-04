@@ -1,4 +1,5 @@
 """Dependencies for Supabase authentication"""
+import logging
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase import Client
@@ -6,6 +7,8 @@ from . import auth
 from . import crud_supabase as crud
 from .supabase_client import get_supabase_admin, get_supabase_anon
 from typing import Dict, Tuple, Optional
+
+logger = logging.getLogger(__name__)
 
 security = HTTPBearer()
 security_optional = HTTPBearer(auto_error=False)
@@ -119,10 +122,13 @@ def get_current_participant(
     else:
         # Try as Supabase Auth token - use anon client for auth verification
         try:
+            logger.info(f"Attempting Supabase Auth token verification, token prefix: {token[:20]}...")
             # Use anon client for verifying user tokens (not service role)
             supabase_anon = get_supabase_anon()
             user_response = supabase_anon.auth.get_user(token)
+            logger.info(f"Supabase auth response: {user_response}")
             if not user_response or not user_response.user:
+                logger.warning("No user in Supabase auth response")
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid or expired token",
@@ -130,11 +136,13 @@ def get_current_participant(
                 )
 
             supabase_auth_id = user_response.user.id
+            logger.info(f"Got Supabase user ID: {supabase_auth_id}")
             # Use admin client for database operations (bypasses RLS)
             participant_user = crud.get_participant_user_by_supabase_auth_id(supabase, supabase_auth_id)
 
             # If no participant user exists yet, create one from Supabase Auth data
             if not participant_user:
+                logger.info(f"Creating new participant user for Supabase auth ID: {supabase_auth_id}")
                 user_metadata = user_response.user.user_metadata or {}
                 participant_user = crud.create_participant_user(supabase, {
                     'email': user_response.user.email,
@@ -145,6 +153,7 @@ def get_current_participant(
         except HTTPException:
             raise
         except Exception as e:
+            logger.error(f"Supabase auth verification failed: {type(e).__name__}: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=f"Invalid or expired token: {str(e)}",
