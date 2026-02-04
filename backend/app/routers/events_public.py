@@ -5,7 +5,7 @@ from typing import List, Dict, Optional
 from .. import schemas
 from .. import crud_supabase as crud
 from ..supabase_client import get_supabase_admin
-from ..dependencies_supabase import get_current_participant, get_current_participant_optional
+from ..dependencies_supabase import get_current_participant
 
 router = APIRouter(
     prefix="/api/public",
@@ -181,28 +181,27 @@ def register_for_event(
     event_id: str,
     participant_data: schemas.ParticipantRegister,
     access_code: Optional[str] = Query(None, description="Access code for private events"),
-    current_user: Optional[Dict] = Depends(get_current_participant_optional),
+    current_user: Dict = Depends(get_current_participant),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """
     Register for an event.
 
-    This endpoint supports both authenticated and anonymous registration.
-    For authenticated users, the registration is linked to their account.
-    For private events, a valid access code must be provided.
+    This endpoint requires authentication. The registration is linked to the
+    participant's account. For private events, a valid access code must be provided.
 
     Args:
         event_id: UUID of the event to register for.
         participant_data: Registration data.
         access_code: Optional access code for private events.
-        current_user: Optional current participant user (if authenticated).
+        current_user: Current participant user (authentication required).
         supabase: Supabase client instance.
 
     Returns:
         Created participant registration.
 
     Raises:
-        HTTPException: Various errors for invalid event, duplicate email, etc.
+        HTTPException: 401 if not authenticated, various errors for invalid event, etc.
     """
     # Get and validate event
     event = crud.get_event_by_id(supabase, event_id)
@@ -239,14 +238,11 @@ def register_for_event(
     # Create participant registration
     participant_dict = participant_data.model_dump()
 
-    # Link to participant user account if authenticated
-    if current_user:
-        participant_dict['participant_user_id'] = current_user['id']
+    # Always link to the authenticated participant user account
+    participant_dict['participant_user_id'] = current_user['id']
 
     db_participant = crud.create_participant(supabase, event_id, participant_dict)
 
-    # If authenticated and this is a new email, we might want to link existing registrations
-    # For now, we just return the new registration
     return db_participant
 
 

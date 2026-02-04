@@ -5,7 +5,7 @@ from typing import List, Dict
 from .. import schemas
 from .. import crud_supabase as crud
 from ..supabase_client import get_supabase_admin
-from ..dependencies_supabase import get_current_matcher
+from ..dependencies_supabase import get_current_matcher, get_current_participant
 
 router = APIRouter(
     prefix="/api/events/{event_id}/participants",
@@ -16,9 +16,27 @@ router = APIRouter(
 def register_participant(
     event_id: str,
     participant: schemas.ParticipantRegister,
+    current_user: Dict = Depends(get_current_participant),
     supabase: Client = Depends(get_supabase_admin)
 ):
-    """Public endpoint for participant registration (no auth required)."""
+    """
+    Register a participant for an event.
+
+    This endpoint requires authentication. The registration is linked to the
+    participant's account.
+
+    Args:
+        event_id: UUID of the event to register for.
+        participant: Registration data.
+        current_user: Current participant user (authentication required).
+        supabase: Supabase client instance.
+
+    Returns:
+        Created participant registration.
+
+    Raises:
+        HTTPException: 401 if not authenticated, 404 if event not found, 409 if duplicate.
+    """
     # Verify event exists
     event = crud.get_event_by_id(supabase, event_id)
     if not event:
@@ -34,8 +52,9 @@ def register_participant(
             detail="This email is already registered for this event"
         )
 
-    # Create participant
+    # Create participant and link to authenticated user
     participant_data = participant.model_dump()
+    participant_data['participant_user_id'] = current_user['id']
     db_participant = crud.create_participant(supabase, event_id, participant_data)
     return db_participant
 

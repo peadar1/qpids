@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useParticipantAuth } from '../../context/ParticipantAuthContext';
 import { Heart, Mail, Lock, User, Sparkles } from 'lucide-react';
 
 /**
  * Login/Signup page for participants.
  * Supports Google OAuth and email/password authentication.
+ * Supports redirect parameter to return users to their original destination.
  */
 export default function ParticipantLogin() {
   const [isSignup, setIsSignup] = useState(false);
@@ -17,6 +18,10 @@ export default function ParticipantLogin() {
 
   const { login, signup, loginWithGoogle } = useParticipantAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Get redirect URL from query params (default to /find)
+  const redirectUrl = searchParams.get('redirect') || '/find';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -34,7 +39,8 @@ export default function ParticipantLogin() {
       : await login(email, password);
 
     if (result.success) {
-      navigate('/find');
+      // Redirect to the original destination or default to /find
+      navigate(redirectUrl);
     } else {
       setError(result.error);
     }
@@ -45,6 +51,11 @@ export default function ParticipantLogin() {
   const handleGoogleLogin = async () => {
     setError('');
     setLoading(true);
+
+    // Store redirect URL in sessionStorage for OAuth callback to use
+    if (redirectUrl && redirectUrl !== '/find') {
+      sessionStorage.setItem('auth_redirect', redirectUrl);
+    }
 
     const result = await loginWithGoogle();
 

@@ -16,30 +16,18 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
         "Missing Supabase configuration. Please set SUPABASE_URL and SUPABASE_SERVICE_KEY in .env file"
     )
 
-# Service client for admin operations (full access, bypasses RLS)
-supabase_admin: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-
-# Anon client for public operations (respects RLS policies)
-supabase_anon: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-
 
 def get_supabase_admin() -> Client:
     """Get Supabase admin client (service role)
-
-    Use this for:
-    - Backend API operations
-    - Admin tasks
-    - Operations that need to bypass RLS
+    
+    Creates a fresh client per request to avoid stale connections.
     """
-    return supabase_admin
+    return create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 
 def get_supabase_anon() -> Client:
     """Get Supabase anon client (public role)
-
-    Use this for:
-    - Public operations
-    - Client-side operations
-    - Operations that should respect RLS
+    
+    Creates a fresh client per request to avoid stale connections.
     """
-    return supabase_anon
+    return create_client(SUPABASE_URL, SUPABASE_ANON_KEY)

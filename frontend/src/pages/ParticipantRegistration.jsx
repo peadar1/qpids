@@ -21,8 +21,8 @@ export default function ParticipantRegistration() {
   const [searchParams] = useSearchParams();
   const accessCode = searchParams.get('code');
 
-  // Get participant auth context (optional - works for both authenticated and anonymous)
-  const { user: participantUser, isAuthenticated } = useParticipantAuth();
+  // Get participant auth context - authentication is now required
+  const { user: participantUser, isAuthenticated, loading: authLoading } = useParticipantAuth();
 
   const [event, setEvent] = useState(null);
   const [customQuestions, setCustomQuestions] = useState([]);
@@ -45,6 +45,18 @@ export default function ParticipantRegistration() {
 
   // Custom question answers
   const [customAnswers, setCustomAnswers] = useState({});
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      // Build redirect URL with access code if present
+      let redirectPath = `/events/${eventId}/register`;
+      if (accessCode) {
+        redirectPath += `?code=${accessCode}`;
+      }
+      navigate(`/find/login?redirect=${encodeURIComponent(redirectPath)}`);
+    }
+  }, [authLoading, isAuthenticated, eventId, accessCode, navigate]);
 
   // Pre-fill form with authenticated user data
   useEffect(() => {
@@ -309,8 +321,8 @@ export default function ParticipantRegistration() {
     }
   };
 
-  // Loading state
-  if (loading) {
+  // Loading state (including auth check)
+  if (loading || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pink-50 via-red-50 to-orange-50">
         <div className="text-center">
@@ -330,19 +342,10 @@ export default function ParticipantRegistration() {
             <div className="bg-green-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
               <CheckCircle className="text-green-600" size={48} />
             </div>
-            <h2 className="text-3xl font-bold text-gray-800 mb-4">You're Registered! 🎉</h2>
+            <h2 className="text-3xl font-bold text-gray-800 mb-4">You're Registered!</h2>
             <p className="text-gray-600 mb-6">
               Thanks for signing up for <strong>{event?.name}</strong>!
             </p>
-
-            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-4">
-              <p className="text-sm text-blue-800 mb-2">
-                <strong>📧 Please verify your email</strong>
-              </p>
-              <p className="text-xs text-blue-700">
-                We've sent a verification link to your email address. Please check your inbox and click the link to complete your registration.
-              </p>
-            </div>
 
             <div className="bg-pink-50 border-2 border-pink-200 rounded-xl p-4 mb-6">
               <p className="text-sm text-pink-800">
@@ -350,9 +353,16 @@ export default function ParticipantRegistration() {
               </p>
             </div>
 
-            <p className="text-gray-500 text-sm">
+            <p className="text-gray-500 text-sm mb-4">
               Keep an eye on your email for updates and match details!
             </p>
+
+            <Link
+              to="/find/my-events"
+              className="inline-flex items-center gap-2 text-pink-600 font-semibold hover:text-pink-700 transition-colors"
+            >
+              View My Events <ArrowRight size={18} />
+            </Link>
           </div>
         </div>
 

@@ -26,9 +26,11 @@ export default function AuthCallback() {
         }
 
         if (session) {
-          // Session exists - redirect to participant home
+          // Session exists - redirect to stored destination or default
           // The ParticipantAuthContext will handle creating/fetching the user
-          navigate('/find');
+          const redirectUrl = sessionStorage.getItem('auth_redirect') || '/find';
+          sessionStorage.removeItem('auth_redirect');
+          navigate(redirectUrl);
         } else {
           // No session - check URL for error
           const params = new URLSearchParams(window.location.search);
