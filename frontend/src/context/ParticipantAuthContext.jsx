@@ -48,6 +48,8 @@ export const ParticipantAuthProvider = ({ children }) => {
             setUser(response.data);
             setToken(session.access_token);
             setAuthMethod('oauth');
+            // Store OAuth token in localStorage so API interceptor can use it
+            localStorage.setItem('participant_token', session.access_token);
           } catch (error) {
             console.error('Failed to fetch participant user:', error);
             // Session exists but backend doesn't recognize - sign out
@@ -73,14 +75,21 @@ export const ParticipantAuthProvider = ({ children }) => {
           setUser(response.data);
           setToken(session.access_token);
           setAuthMethod('oauth');
+          // Store OAuth token in localStorage so API interceptor can use it
+          localStorage.setItem('participant_token', session.access_token);
         } catch (error) {
           console.error('Failed to fetch participant user after sign in:', error);
         }
+      } else if (event === 'TOKEN_REFRESHED' && session) {
+        // Update localStorage when token is refreshed
+        setToken(session.access_token);
+        localStorage.setItem('participant_token', session.access_token);
       } else if (event === 'SIGNED_OUT') {
         if (authMethod === 'oauth') {
           setUser(null);
           setToken(null);
           setAuthMethod(null);
+          localStorage.removeItem('participant_token');
         }
       }
     });

@@ -16,6 +16,11 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
         "Missing Supabase configuration. Please set SUPABASE_URL and SUPABASE_SERVICE_KEY in .env file"
     )
 
+if not SUPABASE_ANON_KEY:
+    raise ValueError(
+        "Missing SUPABASE_ANON_KEY. Please set it in .env file (required for OAuth token verification)"
+    )
+
 
 def get_supabase_admin() -> Client:
     """Get Supabase admin client (service role)

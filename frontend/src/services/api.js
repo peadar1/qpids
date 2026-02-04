@@ -11,10 +11,19 @@ const api = axios.create({
 
 // Add auth token to requests if it exists
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  // Check for organizer token first
+  const organizerToken = localStorage.getItem('token');
+  if (organizerToken) {
+    config.headers.Authorization = `Bearer ${organizerToken}`;
+    return config;
   }
+
+  // Fall back to participant token if no organizer token
+  const participantToken = localStorage.getItem('participant_token');
+  if (participantToken) {
+    config.headers.Authorization = `Bearer ${participantToken}`;
+  }
+
   return config;
 });
 

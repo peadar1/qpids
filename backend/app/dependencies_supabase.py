@@ -4,7 +4,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase import Client
 from . import auth
 from . import crud_supabase as crud
-from .supabase_client import get_supabase_admin
+from .supabase_client import get_supabase_admin, get_supabase_anon
 from typing import Dict, Tuple, Optional
 
 security = HTTPBearer()
@@ -117,10 +117,11 @@ def get_current_participant(
 
         participant_user = crud.get_participant_user_by_email(supabase, participant_email)
     else:
-        # Try as Supabase Auth token - verify with Supabase
+        # Try as Supabase Auth token - use anon client for auth verification
         try:
-            # Use Supabase to verify the token and get user info
-            user_response = supabase.auth.get_user(token)
+            # Use anon client for verifying user tokens (not service role)
+            supabase_anon = get_supabase_anon()
+            user_response = supabase_anon.auth.get_user(token)
             if not user_response or not user_response.user:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -129,6 +130,7 @@ def get_current_participant(
                 )
 
             supabase_auth_id = user_response.user.id
+            # Use admin client for database operations (bypasses RLS)
             participant_user = crud.get_participant_user_by_supabase_auth_id(supabase, supabase_auth_id)
 
             # If no participant user exists yet, create one from Supabase Auth data
@@ -140,10 +142,12 @@ def get_current_participant(
                     'supabase_auth_id': supabase_auth_id,
                     'profile_data': user_metadata
                 })
-        except Exception:
+        except HTTPException:
+            raise
+        except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired token",
+                detail=f"Invalid or expired token: {str(e)}",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
@@ -188,8 +192,9 @@ def get_current_participant_optional(
             if participant_email and user_type == "participant":
                 return crud.get_participant_user_by_email(supabase, participant_email)
         else:
-            # Try Supabase Auth token
-            user_response = supabase.auth.get_user(token)
+            # Try Supabase Auth token - use anon client for verification
+            supabase_anon = get_supabase_anon()
+            user_response = supabase_anon.auth.get_user(token)
             if user_response and user_response.user:
                 return crud.get_participant_user_by_supabase_auth_id(supabase, user_response.user.id)
     except Exception:
