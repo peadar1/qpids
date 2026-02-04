@@ -1,11 +1,16 @@
 """Participant authentication router using Supabase Auth and email/password fallback."""
-from fastapi import APIRouter, Depends, HTTPException, status
+import os
+import httpx
+import logging
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from supabase import Client
-from typing import Dict
+from typing import Dict, Optional
 from .. import schemas, auth
 from .. import crud_supabase as crud
 from ..supabase_client import get_supabase_admin
 from ..dependencies_supabase import get_current_participant
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/participant-auth",
@@ -161,6 +166,64 @@ def oauth_callback(
         detail="Use the Authorization header with your Supabase Auth token. "
                "The /me endpoint will create your account if needed."
     )
+
+
+@router.get("/debug-token")
+def debug_token(
+    authorization: Optional[str] = Header(None)
+):
+    """
+    Debug endpoint to verify token handling.
+    Returns information about the received token and Supabase verification.
+    """
+    if not authorization:
+        return {"error": "No Authorization header received"}
+
+    # Extract token from "Bearer <token>"
+    parts = authorization.split(" ")
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return {"error": f"Invalid Authorization format: {authorization[:50]}..."}
+
+    token = parts[1]
+    result = {
+        "token_received": True,
+        "token_prefix": token[:30] + "..." if len(token) > 30 else token,
+        "token_length": len(token),
+    }
+
+    # Check environment variables
+    supabase_url = os.getenv("SUPABASE_URL")
+    anon_key = os.getenv("SUPABASE_ANON_KEY")
+    result["supabase_url_set"] = bool(supabase_url)
+    result["anon_key_set"] = bool(anon_key)
+
+    if not supabase_url or not anon_key:
+        result["error"] = "Missing SUPABASE_URL or SUPABASE_ANON_KEY"
+        return result
+
+    # Try to verify with Supabase Auth API
+    try:
+        auth_url = f"{supabase_url}/auth/v1/user"
+        response = httpx.get(
+            auth_url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "apikey": anon_key
+            },
+            timeout=10.0
+        )
+        result["supabase_status"] = response.status_code
+        if response.status_code == 200:
+            user_data = response.json()
+            result["user_id"] = user_data.get("id")
+            result["user_email"] = user_data.get("email")
+            result["success"] = True
+        else:
+            result["supabase_error"] = response.text[:200]
+    except Exception as e:
+        result["exception"] = f"{type(e).__name__}: {str(e)}"
+
+    return result
 
 
 @router.get("/me", response_model=schemas.ParticipantUserResponse)

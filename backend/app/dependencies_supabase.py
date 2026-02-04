@@ -30,28 +30,37 @@ def verify_supabase_token(token: str) -> Optional[Dict]:
         User data dictionary if token is valid, None otherwise.
     """
     if not SUPABASE_URL:
-        logger.error("SUPABASE_URL not configured")
+        print("[AUTH] ERROR: SUPABASE_URL not configured")
+        return None
+
+    anon_key = os.getenv("SUPABASE_ANON_KEY", "")
+    if not anon_key:
+        print("[AUTH] ERROR: SUPABASE_ANON_KEY not configured")
         return None
 
     try:
         # Call the Supabase Auth /user endpoint directly
         auth_url = f"{SUPABASE_URL}/auth/v1/user"
+        print(f"[AUTH] Calling Supabase auth: {auth_url}")
         response = httpx.get(
             auth_url,
             headers={
                 "Authorization": f"Bearer {token}",
-                "apikey": os.getenv("SUPABASE_ANON_KEY", "")
+                "apikey": anon_key
             },
             timeout=10.0
         )
 
+        print(f"[AUTH] Supabase response status: {response.status_code}")
         if response.status_code == 200:
-            return response.json()
+            user_data = response.json()
+            print(f"[AUTH] Got user: {user_data.get('email')}")
+            return user_data
         else:
-            logger.warning(f"Supabase auth verification returned {response.status_code}: {response.text}")
+            print(f"[AUTH] Supabase auth failed: {response.status_code} - {response.text[:200]}")
             return None
     except Exception as e:
-        logger.error(f"Error calling Supabase auth API: {type(e).__name__}: {str(e)}")
+        print(f"[AUTH] Exception calling Supabase: {type(e).__name__}: {str(e)}")
         return None
 
 security = HTTPBearer()
@@ -166,13 +175,13 @@ def get_current_participant(
     else:
         # Try as Supabase Auth token - verify using direct API call
         try:
-            logger.info(f"Attempting Supabase Auth token verification, token prefix: {token[:20]}...")
+            print(f"[AUTH] Attempting Supabase Auth token verification, token prefix: {token[:20]}...")
 
             # Use direct API call to verify token (more reliable than SDK)
             user_data = verify_supabase_token(token)
 
             if not user_data:
-                logger.warning("Supabase token verification failed - no user data returned")
+                print("[AUTH] Supabase token verification failed - no user data returned")
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid or expired token",
@@ -184,20 +193,20 @@ def get_current_participant(
             user_metadata = user_data.get('user_metadata', {})
 
             if not supabase_auth_id:
-                logger.warning("No user ID in Supabase auth response")
+                print("[AUTH] No user ID in Supabase auth response")
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid token - no user ID",
                     headers={"WWW-Authenticate": "Bearer"},
                 )
 
-            logger.info(f"Got Supabase user ID: {supabase_auth_id}, email: {user_email}")
+            print(f"[AUTH] Got Supabase user ID: {supabase_auth_id}, email: {user_email}")
             # Use admin client for database operations (bypasses RLS)
             participant_user = crud.get_participant_user_by_supabase_auth_id(supabase, supabase_auth_id)
 
             # If no participant user exists yet, create one from Supabase Auth data
             if not participant_user:
-                logger.info(f"Creating new participant user for Supabase auth ID: {supabase_auth_id}")
+                print(f"[AUTH] Creating new participant user for Supabase auth ID: {supabase_auth_id}")
                 participant_user = crud.create_participant_user(supabase, {
                     'email': user_email,
                     'name': user_metadata.get('full_name') or user_metadata.get('name') or (user_email.split('@')[0] if user_email else 'User'),
@@ -207,7 +216,7 @@ def get_current_participant(
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Supabase auth verification failed: {type(e).__name__}: {str(e)}")
+            print(f"[AUTH] Supabase auth verification failed: {type(e).__name__}: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=f"Invalid or expired token: {str(e)}",
