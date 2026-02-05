@@ -11,14 +11,17 @@ const api = axios.create({
 
 // Add auth token to requests if it exists
 api.interceptors.request.use((config) => {
-  // Check for organizer token first
+  // Don't override explicitly-set Authorization headers (e.g., from withToken())
+  if (config.headers.Authorization) {
+    return config;
+  }
+
   const organizerToken = localStorage.getItem('token');
   if (organizerToken) {
     config.headers.Authorization = `Bearer ${organizerToken}`;
     return config;
   }
 
-  // Fall back to participant token if no organizer token
   const participantToken = localStorage.getItem('participant_token');
   if (participantToken) {
     config.headers.Authorization = `Bearer ${participantToken}`;

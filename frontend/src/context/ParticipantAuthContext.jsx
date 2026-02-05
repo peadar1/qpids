@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { participantAuthAPI } from '../services/api';
 import {
   supabase,
@@ -21,6 +21,7 @@ export const ParticipantAuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
   const [authMethod, setAuthMethod] = useState(null); // 'email' or 'oauth'
+  const initializingRef = useRef(false);
 
   // Check for existing session on mount
   useEffect(() => {
@@ -43,17 +44,20 @@ export const ParticipantAuthProvider = ({ children }) => {
         const session = await getSupabaseSession();
         if (session?.access_token) {
           // Fetch or create participant user from our backend
+          initializingRef.current = true;
           try {
             const response = await participantAuthAPI.getMe(session.access_token);
             setUser(response.data);
             setToken(session.access_token);
             setAuthMethod('oauth');
-            // Store OAuth token in localStorage so API interceptor can use it
             localStorage.setItem('participant_token', session.access_token);
+            localStorage.setItem('participant_user', JSON.stringify(response.data));
           } catch (error) {
             console.error('Failed to fetch participant user:', error);
             // Session exists but backend doesn't recognize - sign out
             await signOutFromSupabase();
+          } finally {
+            initializingRef.current = false;
           }
         }
       } catch (error) {
@@ -70,13 +74,15 @@ export const ParticipantAuthProvider = ({ children }) => {
     // Listen for Supabase auth state changes
     const { data: { subscription } } = onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
+        // Skip if initAuth() is already handling this session
+        if (initializingRef.current) return;
         try {
           const response = await participantAuthAPI.getMe(session.access_token);
           setUser(response.data);
           setToken(session.access_token);
           setAuthMethod('oauth');
-          // Store OAuth token in localStorage so API interceptor can use it
           localStorage.setItem('participant_token', session.access_token);
+          localStorage.setItem('participant_user', JSON.stringify(response.data));
         } catch (error) {
           console.error('Failed to fetch participant user after sign in:', error);
         }
