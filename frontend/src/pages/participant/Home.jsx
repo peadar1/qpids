@@ -1,5 +1,5 @@
 import { useNavigate, Link } from 'react-router-dom';
-import { useParticipantAuth } from '../../context/ParticipantAuthContext';
+import { useAuth } from '../../context/AuthContext';
 import { Heart, Search, Key, Calendar, Users, LogOut, Sparkles } from 'lucide-react';
 
 /**
@@ -7,11 +7,11 @@ import { Heart, Search, Key, Calendar, Users, LogOut, Sparkles } from 'lucide-re
  * Shows navigation options for browsing events, entering codes, and viewing matches.
  */
 export default function ParticipantHome() {
-  const { user, isAuthenticated, logout } = useParticipantAuth();
+  const { user, isAuthenticated, signOut } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
-    await logout();
+    await signOut();
     navigate('/');
   };
 

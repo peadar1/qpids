@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useParticipantAuth } from '../../context/ParticipantAuthContext';
+import { useAuth } from '../../context/AuthContext';
 import { publicEventAPI } from '../../services/api';
 import { Heart, ArrowLeft, User, Mail, Phone, MapPin, Calendar, Star, MessageCircle } from 'lucide-react';
 
@@ -9,7 +9,7 @@ import { Heart, ArrowLeft, User, Mail, Phone, MapPin, Calendar, Star, MessageCir
  * Displays all matches across all events the participant has registered for.
  */
 export default function MyMatches() {
-  const { isAuthenticated, loading: authLoading } = useParticipantAuth();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

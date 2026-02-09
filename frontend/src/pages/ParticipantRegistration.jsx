@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { eventAPI, formQuestionAPI, participantAPI, publicEventAPI } from '../services/api';
-import { useParticipantAuth } from '../context/ParticipantAuthContext';
+import { useAuth } from '../context/AuthContext';
 import {
   Heart,
   Sparkles,
@@ -22,7 +22,7 @@ export default function ParticipantRegistration() {
   const accessCode = searchParams.get('code');
 
   // Get participant auth context - authentication is now required
-  const { user: participantUser, isAuthenticated, loading: authLoading } = useParticipantAuth();
+  const { user: participantUser, isAuthenticated, loading: authLoading } = useAuth();
 
   const [event, setEvent] = useState(null);
   const [customQuestions, setCustomQuestions] = useState([]);
