@@ -12,6 +12,20 @@ from ..dependencies_supabase import get_current_participant
 
 logger = logging.getLogger(__name__)
 
+
+def strip_sensitive_data(user: Dict) -> Dict:
+    """Remove password_hash from user data before returning to client."""
+    if not user:
+        return user
+    result = {**user}
+    if 'profile_data' in result and isinstance(result.get('profile_data'), dict):
+        result['profile_data'] = {
+            k: v for k, v in result['profile_data'].items()
+            if k != 'password_hash'
+        }
+    return result
+
+
 router = APIRouter(
     prefix="/api/participant-auth",
     tags=["participant-auth"]
@@ -73,7 +87,7 @@ def signup(
     return {
         "access_token": token,
         "token_type": "bearer",
-        "participant_user": db_user
+        "participant_user": strip_sensitive_data(db_user)
     }
 
 
@@ -133,7 +147,7 @@ def login(
     return {
         "access_token": token,
         "token_type": "bearer",
-        "participant_user": user
+        "participant_user": strip_sensitive_data(user)
     }
 
 
@@ -243,7 +257,7 @@ def get_me(
     Returns:
         Participant user profile data.
     """
-    return current_user
+    return strip_sensitive_data(current_user)
 
 
 @router.put("/me", response_model=schemas.ParticipantUserResponse)
@@ -265,7 +279,7 @@ def update_me(
     """
     update_data = user_update.model_dump(exclude_unset=True)
     updated_user = crud.update_participant_user(supabase, current_user['id'], update_data)
-    return updated_user
+    return strip_sensitive_data(updated_user)
 
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)

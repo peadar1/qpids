@@ -34,10 +34,15 @@ app = FastAPI(
 cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000")
 allowed_origins = [origin.strip() for origin in cors_origins.split(",")]
 
-# CORS middleware with configurable origins
+# Vercel preview pattern: matches cupids-<hash>-<username>.vercel.app
+# Adjust 'cupids' to your actual Vercel project name if different
+VERCEL_PREVIEW_REGEX = r"^https://cupids(-[a-z0-9]+)?(-[a-z0-9-]+)?\.vercel\.app$"
+
+# CORS middleware with configurable origins and Vercel preview support
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=VERCEL_PREVIEW_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
