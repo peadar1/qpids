@@ -9,22 +9,27 @@ const api = axios.create({
   },
 });
 
-// Add auth token to requests if it exists
+// Add auth token to requests based on route
 api.interceptors.request.use((config) => {
   // Don't override explicitly-set Authorization headers (e.g., from withToken())
   if (config.headers.Authorization) {
     return config;
   }
 
-  const organizerToken = localStorage.getItem('token');
-  if (organizerToken) {
-    config.headers.Authorization = `Bearer ${organizerToken}`;
-    return config;
-  }
+  // Route-based token selection to prevent organizer token from being used on participant routes
+  const isParticipantRoute = config.url?.includes('/participant-auth') ||
+                              config.url?.includes('/public/events');
 
-  const participantToken = localStorage.getItem('participant_token');
-  if (participantToken) {
-    config.headers.Authorization = `Bearer ${participantToken}`;
+  if (isParticipantRoute) {
+    const participantToken = localStorage.getItem('participant_token');
+    if (participantToken) {
+      config.headers.Authorization = `Bearer ${participantToken}`;
+    }
+  } else {
+    const organizerToken = localStorage.getItem('token');
+    if (organizerToken) {
+      config.headers.Authorization = `Bearer ${organizerToken}`;
+    }
   }
 
   return config;

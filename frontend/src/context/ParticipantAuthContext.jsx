@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { participantAuthAPI } from '../services/api';
 import {
-  supabase,
   signInWithGoogle,
   signOutFromSupabase,
   getSupabaseSession,
@@ -44,14 +43,16 @@ export const ParticipantAuthProvider = ({ children }) => {
         const session = await getSupabaseSession();
         if (session?.access_token) {
           // Fetch or create participant user from our backend
+          // Backend returns its own JWT, which we store instead of Supabase token
           initializingRef.current = true;
           try {
             const response = await participantAuthAPI.getMe(session.access_token);
-            setUser(response.data);
-            setToken(session.access_token);
+            const { access_token, participant_user } = response.data;
+            setUser(participant_user);
+            setToken(access_token);  // Backend JWT, not Supabase token
             setAuthMethod('oauth');
-            localStorage.setItem('participant_token', session.access_token);
-            localStorage.setItem('participant_user', JSON.stringify(response.data));
+            localStorage.setItem('participant_token', access_token);
+            localStorage.setItem('participant_user', JSON.stringify(participant_user));
           } catch (error) {
             console.error('Failed to fetch participant user:', error);
             // Session exists but backend doesn't recognize - sign out
@@ -77,19 +78,21 @@ export const ParticipantAuthProvider = ({ children }) => {
         // Skip if initAuth() is already handling this session
         if (initializingRef.current) return;
         try {
+          // Backend returns its own JWT, which we store instead of Supabase token
           const response = await participantAuthAPI.getMe(session.access_token);
-          setUser(response.data);
-          setToken(session.access_token);
+          const { access_token, participant_user } = response.data;
+          setUser(participant_user);
+          setToken(access_token);  // Backend JWT, not Supabase token
           setAuthMethod('oauth');
-          localStorage.setItem('participant_token', session.access_token);
-          localStorage.setItem('participant_user', JSON.stringify(response.data));
+          localStorage.setItem('participant_token', access_token);
+          localStorage.setItem('participant_user', JSON.stringify(participant_user));
         } catch (error) {
           console.error('Failed to fetch participant user after sign in:', error);
         }
       } else if (event === 'TOKEN_REFRESHED' && session) {
-        // Update localStorage when token is refreshed
-        setToken(session.access_token);
-        localStorage.setItem('participant_token', session.access_token);
+        // Backend JWT doesn't need refresh from Supabase - ignore
+        // Our JWT has its own expiry (7 days by default)
+        // The Supabase session is only used for initial OAuth verification
       } else if (event === 'SIGNED_OUT') {
         if (authMethod === 'oauth') {
           setUser(null);

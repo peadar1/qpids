@@ -240,24 +240,32 @@ def debug_token(
     return result
 
 
-@router.get("/me", response_model=schemas.ParticipantUserResponse)
+@router.get("/me", response_model=schemas.ParticipantTokenResponse)
 def get_me(
     current_user: Dict = Depends(get_current_participant)
 ):
     """
-    Get the current authenticated participant user's profile.
+    Get the current authenticated participant user's profile and issue a backend JWT.
 
-    This endpoint returns the participant user data for the authenticated user.
-    If using a Supabase Auth token and no participant_user exists yet,
-    one will be created automatically.
+    This endpoint converts Supabase OAuth tokens to our custom JWT format,
+    ensuring all participants use the same token type regardless of auth method.
 
     Args:
         current_user: Current participant user from authentication.
 
     Returns:
-        Participant user profile data.
+        Backend JWT token and participant user profile data.
     """
-    return strip_sensitive_data(current_user)
+    # Always issue our own JWT - this converts OAuth tokens to backend JWT
+    token = auth.create_access_token(data={
+        "sub": current_user['email'],
+        "type": "participant"
+    })
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "participant_user": strip_sensitive_data(current_user)
+    }
 
 
 @router.put("/me", response_model=schemas.ParticipantUserResponse)

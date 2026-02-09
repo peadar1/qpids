@@ -132,14 +132,14 @@ npm run preview  # Preview production build
 3. Frontend stores token in localStorage (`token` key)
 4. Protected routes use `get_current_matcher` dependency
 
-#### Participant Authentication (Hybrid Token Pattern)
+#### Participant Authentication (Unified Token Pattern)
 
-Participants can authenticate via two methods, both storing tokens in the same `participant_token` key:
+All participants use the same token format regardless of auth method:
 
-| Method | Token Type | Verification |
-|--------|------------|--------------|
-| Email/Password | Custom JWT (`type: "participant"`) | Backend decodes JWT directly |
-| Google OAuth | Supabase access token | Backend calls Supabase Auth API |
+| Method | Initial Auth | Final Token Stored | Verification |
+|--------|--------------|-------------------|--------------|
+| Email/Password | Backend login | Custom JWT | Backend decodes JWT |
+| Google OAuth | Supabase OAuth | Custom JWT | Backend decodes JWT |
 
 **Email/Password Flow:**
 1. POST `/api/participant-auth/signup` or `/login`
@@ -150,9 +150,11 @@ Participants can authenticate via two methods, both storing tokens in the same `
 **Google OAuth Flow:**
 1. Frontend calls `signInWithGoogle()` -> Google redirect
 2. Callback to `/auth/callback` -> Supabase session created
-3. Supabase access token stored in `localStorage.participant_token`
-4. Backend calls Supabase Auth API (`/auth/v1/user`) to verify token
-5. If no ParticipantUser exists, backend creates one from Supabase user data
+3. Frontend calls GET `/api/participant-auth/me` with Supabase token
+4. Backend verifies Supabase token, creates/retrieves ParticipantUser
+5. Backend returns **its own JWT** (not Supabase token)
+6. Frontend stores backend JWT in `localStorage.participant_token`
+7. TOKEN_REFRESHED events from Supabase are ignored (backend JWT has its own 7-day expiry)
 
 **Security Note:** Password hashes for email/password users are stored server-side in `profile_data` but are stripped from all API responses before returning to the client.
 
