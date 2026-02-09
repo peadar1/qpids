@@ -1,19 +1,18 @@
 """Venues router using Supabase"""
 from fastapi import APIRouter, Depends, HTTPException, status
 from supabase import Client
-from typing import List
+from typing import List, Dict
 from .. import schemas
 from .. import crud_supabase as crud
 from ..supabase_client import get_supabase_admin
-from ..dependencies_supabase import get_current_matcher
-from typing import Dict
+from ..dependencies_supabase import require_role
 
 router = APIRouter(
     prefix="/api/events/{event_id}/venues",
     tags=["venues"]
 )
 
-def verify_event_access(event_id: str, current_matcher: Dict, supabase: Client):
+def verify_event_access(event_id: str, current_user: Dict, supabase: Client):
     """Verify that the current matcher has access to this event."""
     event = crud.get_event_by_id(supabase, event_id)
     if not event:
@@ -23,7 +22,7 @@ def verify_event_access(event_id: str, current_matcher: Dict, supabase: Client):
         )
 
     # Verify access
-    if event['creator_id'] != current_matcher['id']:
+    if event['creator_id'] != current_user['id']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this event"
@@ -35,7 +34,7 @@ def verify_event_access(event_id: str, current_matcher: Dict, supabase: Client):
 @router.get("", response_model=List[schemas.VenueResponse])
 def get_venues(
     event_id: str,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Get all venues for an event."""
@@ -48,7 +47,7 @@ def get_venues(
 def get_venue(
     event_id: str,
     venue_id: str,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Get a specific venue."""
@@ -68,7 +67,7 @@ def get_venue(
 def create_venue(
     event_id: str,
     venue: schemas.VenueCreate,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Create a new venue for an event."""
@@ -84,7 +83,7 @@ def update_venue(
     event_id: str,
     venue_id: str,
     venue_update: schemas.VenueUpdate,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Update a venue."""
@@ -106,7 +105,7 @@ def update_venue(
 def delete_venue(
     event_id: str,
     venue_id: str,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Delete a venue (soft delete if has matches)."""

@@ -724,3 +724,160 @@ def link_participant_to_user(supabase: Client, participant_id: str, participant_
         'participant_user_id': participant_user_id
     }).eq('id', participant_id).execute()
     return get_participant_by_id(supabase, participant_id)
+
+
+# ===================================
+# UNIFIED USERS OPERATIONS
+# ===================================
+
+def get_user_by_id(supabase: Client, user_id: str) -> Optional[Dict]:
+    """
+    Get a unified user by ID.
+
+    Args:
+        supabase: Supabase client instance.
+        user_id: The UUID of the user.
+
+    Returns:
+        User data as a dictionary, or None if not found.
+    """
+    try:
+        response = supabase.table('users').select('*').eq('id', user_id).single().execute()
+        return response.data
+    except APIError as e:
+        logger.debug(f"User not found for id {user_id}: {e}")
+        return None
+
+
+def get_user_by_supabase_auth_id(supabase: Client, auth_id: str) -> Optional[Dict]:
+    """
+    Get a unified user by Supabase Auth ID.
+
+    Args:
+        supabase: Supabase client instance.
+        auth_id: Supabase Auth user ID.
+
+    Returns:
+        User data as a dictionary, or None if not found.
+    """
+    try:
+        response = supabase.table('users').select('*').eq('supabase_auth_id', auth_id).single().execute()
+        return response.data
+    except APIError as e:
+        logger.debug(f"User not found for supabase_auth_id {auth_id}: {e}")
+        return None
+
+
+def get_user_by_email(supabase: Client, email: str) -> Optional[Dict]:
+    """
+    Get a unified user by email.
+
+    Args:
+        supabase: Supabase client instance.
+        email: Email address to look up (case-insensitive).
+
+    Returns:
+        User data as a dictionary, or None if not found.
+    """
+    try:
+        response = supabase.table('users').select('*').ilike('email', email).single().execute()
+        return response.data
+    except APIError as e:
+        logger.debug(f"User not found for email {email}: {e}")
+        return None
+
+
+def create_user(supabase: Client, data: Dict) -> Dict:
+    """
+    Create a new unified user.
+
+    Args:
+        supabase: Supabase client instance.
+        data: Dictionary containing user data (supabase_auth_id, email, name, roles, etc.).
+
+    Returns:
+        The created user data.
+    """
+    # Convert date_of_birth to string if it's a date object
+    if 'date_of_birth' in data and data['date_of_birth'] and hasattr(data['date_of_birth'], 'isoformat'):
+        data['date_of_birth'] = data['date_of_birth'].isoformat()
+
+    supabase.table('users').insert(data).execute()
+    return get_user_by_supabase_auth_id(supabase, data['supabase_auth_id'])
+
+
+def update_user(supabase: Client, user_id: str, data: Dict) -> Dict:
+    """
+    Update a unified user.
+
+    Args:
+        supabase: Supabase client instance.
+        user_id: UUID of the user to update.
+        data: Dictionary containing fields to update.
+
+    Returns:
+        Updated user data.
+    """
+    update_data = {}
+    for k, v in data.items():
+        if v is not None:
+            if hasattr(v, 'isoformat'):
+                v = v.isoformat()
+            update_data[k] = v
+
+    supabase.table('users').update(update_data).eq('id', user_id).execute()
+    return get_user_by_id(supabase, user_id)
+
+
+def link_user_to_supabase_auth(supabase: Client, user_id: str, auth_id: str) -> Dict:
+    """
+    Link an existing user to a Supabase Auth ID.
+
+    Args:
+        supabase: Supabase client instance.
+        user_id: UUID of the user.
+        auth_id: Supabase Auth user ID to link.
+
+    Returns:
+        Updated user data.
+    """
+    supabase.table('users').update({'supabase_auth_id': auth_id}).eq('id', user_id).execute()
+    return get_user_by_id(supabase, user_id)
+
+
+def add_role_to_user(supabase: Client, user_id: str, role: str) -> Dict:
+    """
+    Add a role to a user's roles array.
+
+    Args:
+        supabase: Supabase client instance.
+        user_id: UUID of the user.
+        role: Role to add ('participant' or 'matcher').
+
+    Returns:
+        Updated user data.
+    """
+    user = get_user_by_id(supabase, user_id)
+    if not user:
+        raise ValueError(f"User not found: {user_id}")
+
+    current_roles = user.get('roles', [])
+    if role not in current_roles:
+        new_roles = list(set(current_roles + [role]))
+        return update_user(supabase, user_id, {'roles': new_roles})
+    return user
+
+
+def update_user_last_login(supabase: Client, user_id: str) -> Dict:
+    """
+    Update the last_login timestamp for a user.
+
+    Args:
+        supabase: Supabase client instance.
+        user_id: UUID of the user.
+
+    Returns:
+        Updated user data.
+    """
+    from datetime import datetime, timezone
+    return update_user(supabase, user_id, {'last_login': datetime.now(timezone.utc).isoformat()})

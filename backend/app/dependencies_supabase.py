@@ -2,13 +2,14 @@
 import logging
 import httpx
 import os
+from functools import wraps
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase import Client
 from . import auth
 from . import crud_supabase as crud
 from .supabase_client import get_supabase_admin, get_supabase_anon
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,138 @@ def verify_supabase_token(token: str) -> Optional[Dict]:
 
 security = HTTPBearer()
 security_optional = HTTPBearer(auto_error=False)
+
+
+# ===================================
+# UNIFIED AUTH (NEW)
+# ===================================
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    supabase: Client = Depends(get_supabase_admin)
+) -> Dict:
+    """
+    Unified auth: verify Supabase JWT, find/create user.
+
+    User linking logic:
+    1. Find by supabase_auth_id
+    2. Else find by email and link
+    3. Else create new user
+
+    Args:
+        credentials: Bearer token from Authorization header.
+        supabase: Supabase client instance.
+
+    Returns:
+        User data as a dictionary.
+
+    Raises:
+        HTTPException: 401 if token is invalid.
+    """
+    token = credentials.credentials
+
+    # Verify with Supabase Auth API
+    supabase_user = verify_supabase_token(token)
+    if not supabase_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    auth_id = supabase_user['id']
+    email = supabase_user.get('email')
+    metadata = supabase_user.get('user_metadata', {})
+
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token does not contain email",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Find or create user (idempotent)
+    user = crud.get_user_by_supabase_auth_id(supabase, auth_id)
+
+    if not user:
+        # Try to find by email and link
+        user = crud.get_user_by_email(supabase, email)
+        if user:
+            user = crud.link_user_to_supabase_auth(supabase, user['id'], auth_id)
+        else:
+            # Create new user
+            user = crud.create_user(supabase, {
+                'supabase_auth_id': auth_id,
+                'email': email,
+                'name': metadata.get('full_name') or metadata.get('name') or email.split('@')[0],
+                'roles': ['participant']
+            })
+
+    return user
+
+
+def get_current_user_optional(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_optional),
+    supabase: Client = Depends(get_supabase_admin)
+) -> Optional[Dict]:
+    """
+    Optionally get the current authenticated user.
+
+    Similar to get_current_user but returns None instead of raising
+    an exception if no valid token is provided.
+
+    Args:
+        credentials: Optional Bearer token from Authorization header.
+        supabase: Supabase client instance.
+
+    Returns:
+        User data as a dictionary, or None if not authenticated.
+    """
+    if not credentials:
+        return None
+
+    try:
+        token = credentials.credentials
+        supabase_user = verify_supabase_token(token)
+        if not supabase_user or not supabase_user.get('id'):
+            return None
+
+        return crud.get_user_by_supabase_auth_id(supabase, supabase_user['id'])
+    except Exception:
+        return None
+
+
+def require_role(role: str):
+    """
+    Factory for role-based access control.
+
+    Creates a dependency that checks if the current user has the specified role.
+
+    Args:
+        role: Required role ('participant' or 'matcher').
+
+    Returns:
+        A dependency function that returns the user if authorized.
+
+    Example:
+        @router.get("/admin")
+        def admin_endpoint(user: Dict = Depends(require_role('matcher'))):
+            return {"message": "Hello, matcher!"}
+    """
+    def checker(user: Dict = Depends(get_current_user)) -> Dict:
+        user_roles = user.get('roles', [])
+        if role not in user_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"This action requires the '{role}' role"
+            )
+        return user
+    return checker
+
+
+# ===================================
+# LEGACY AUTH (for backward compatibility during transition)
+# ===================================
 
 def get_current_matcher(
     credentials: HTTPAuthorizationCredentials = Depends(security),

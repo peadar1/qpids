@@ -428,3 +428,33 @@ class EventResponseExtended(EventResponse):
     area: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ==================== UNIFIED USER SCHEMAS ====================
+
+class UserBase(BaseModel):
+    """Base schema for unified user accounts."""
+    email: EmailStr
+    name: str = Field(..., min_length=1, max_length=100)
+    phone_number: Optional[str] = Field(None, max_length=20)
+    date_of_birth: Optional[date] = None
+
+
+class UserResponse(UserBase):
+    """Response schema for unified user accounts."""
+    id: str  # UUID from Supabase
+    roles: List[str]
+    profile_data: Optional[dict] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    last_login: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserUpdate(BaseModel):
+    """Schema for updating a unified user account."""
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    phone_number: Optional[str] = Field(None, max_length=20)
+    date_of_birth: Optional[date] = None
+    profile_data: Optional[dict] = None

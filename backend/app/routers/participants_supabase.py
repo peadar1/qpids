@@ -5,7 +5,7 @@ from typing import List, Dict
 from .. import schemas
 from .. import crud_supabase as crud
 from ..supabase_client import get_supabase_admin
-from ..dependencies_supabase import get_current_matcher, get_current_participant
+from ..dependencies_supabase import require_role
 
 router = APIRouter(
     prefix="/api/events/{event_id}/participants",
@@ -16,7 +16,7 @@ router = APIRouter(
 def register_participant(
     event_id: str,
     participant: schemas.ParticipantRegister,
-    current_user: Dict = Depends(get_current_participant),
+    current_user: Dict = Depends(require_role('participant')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """
@@ -62,7 +62,7 @@ def register_participant(
 @router.get("", response_model=List[schemas.ParticipantListResponse])
 def get_participants(
     event_id: str,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Get all participants for an event (requires auth)."""
@@ -74,7 +74,7 @@ def get_participants(
             detail="Event not found"
         )
 
-    if event['creator_id'] != current_matcher['id']:
+    if event['creator_id'] != current_user['id']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this event"
@@ -95,13 +95,13 @@ def get_participants(
 def get_participant(
     event_id: str,
     participant_id: str,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Get a specific participant by ID."""
     # Verify event access
     event = crud.get_event_by_id(supabase, event_id)
-    if not event or event['creator_id'] != current_matcher['id']:
+    if not event or event['creator_id'] != current_user['id']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this event"
@@ -127,13 +127,13 @@ def update_participant(
     event_id: str,
     participant_id: str,
     participant_update: schemas.ParticipantUpdate,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Update a participant."""
     # Verify event access
     event = crud.get_event_by_id(supabase, event_id)
-    if not event or event['creator_id'] != current_matcher['id']:
+    if not event or event['creator_id'] != current_user['id']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this event"
@@ -155,13 +155,13 @@ def update_participant(
 def delete_participant(
     event_id: str,
     participant_id: str,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Delete a participant."""
     # Verify event access
     event = crud.get_event_by_id(supabase, event_id)
-    if not event or event['creator_id'] != current_matcher['id']:
+    if not event or event['creator_id'] != current_user['id']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this event"

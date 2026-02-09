@@ -5,7 +5,7 @@ from typing import List, Dict
 from .. import schemas
 from .. import crud_supabase as crud
 from ..supabase_client import get_supabase_admin
-from ..dependencies_supabase import get_current_matcher
+from ..dependencies_supabase import require_role
 
 router = APIRouter(
     prefix="/api/events/{event_id}/form-questions",
@@ -34,7 +34,7 @@ def get_public_form_questions(
 @router.get("", response_model=List[schemas.FormQuestionResponse])
 def get_form_questions(
     event_id: str,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Get all form questions for an event (requires auth)."""
@@ -46,7 +46,7 @@ def get_form_questions(
             detail="Event not found"
         )
 
-    if event['creator_id'] != current_matcher['id']:
+    if event['creator_id'] != current_user['id']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this event"
@@ -60,13 +60,13 @@ def get_form_questions(
 def create_form_question(
     event_id: str,
     question: schemas.FormQuestionCreate,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Create a new form question."""
     # Verify event access
     event = crud.get_event_by_id(supabase, event_id)
-    if not event or event['creator_id'] != current_matcher['id']:
+    if not event or event['creator_id'] != current_user['id']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this event"
@@ -82,13 +82,13 @@ def create_form_question(
 def reorder_form_questions(
     event_id: str,
     reorder_data: schemas.FormQuestionReorder,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Reorder form questions."""
     # Verify event access
     event = crud.get_event_by_id(supabase, event_id)
-    if not event or event['creator_id'] != current_matcher['id']:
+    if not event or event['creator_id'] != current_user['id']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this event"
@@ -103,13 +103,13 @@ def reorder_form_questions(
 def get_form_question(
     event_id: str,
     question_id: str,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Get a specific form question by ID."""
     # Verify event access
     event = crud.get_event_by_id(supabase, event_id)
-    if not event or event['creator_id'] != current_matcher['id']:
+    if not event or event['creator_id'] != current_user['id']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this event"
@@ -130,13 +130,13 @@ def update_form_question(
     event_id: str,
     question_id: str,
     question_update: schemas.FormQuestionUpdate,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Update a form question."""
     # Verify event access
     event = crud.get_event_by_id(supabase, event_id)
-    if not event or event['creator_id'] != current_matcher['id']:
+    if not event or event['creator_id'] != current_user['id']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this event"
@@ -158,13 +158,13 @@ def update_form_question(
 def delete_form_question(
     event_id: str,
     question_id: str,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Delete a form question."""
     # Verify event access
     event = crud.get_event_by_id(supabase, event_id)
-    if not event or event['creator_id'] != current_matcher['id']:
+    if not event or event['creator_id'] != current_user['id']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this event"

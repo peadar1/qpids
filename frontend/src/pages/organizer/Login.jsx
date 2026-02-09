@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Heart, Mail, Lock, Sparkles } from 'lucide-react';
+import { Heart, Mail, Lock, Sparkles, Chrome } from 'lucide-react';
 
 /**
  * Login page for event organizers/matchers.
- * Provides email/password authentication for the organizer portal.
+ * Provides Google OAuth and email/password authentication.
  */
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -13,20 +13,37 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { login } = useAuth();
+  const { signInWithGoogle, signInWithEmail, isAuthenticated, isMatcher } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
+  // Redirect if already logged in as matcher
+  if (isAuthenticated && isMatcher) {
+    navigate('/organizer/dashboard', { replace: true });
+  }
+
+  const handleGoogleLogin = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      await signInWithGoogle('/organizer/dashboard');
+      // OAuth redirects, so we don't need to do anything here
+    } catch (err) {
+      setError(err.message || 'Google sign-in failed');
+      setLoading(false);
+    }
+  };
+
+  const handleEmailLogin = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    const result = await login(email, password);
-
-    if (result.success) {
+    try {
+      await signInWithEmail(email, password);
+      // Auth state change will trigger redirect via ProtectedRoute
       navigate('/organizer/dashboard');
-    } else {
-      setError(result.error);
+    } catch (err) {
+      setError(err.message || 'Login failed');
     }
 
     setLoading(false);
@@ -74,7 +91,26 @@ export default function Login() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Google Sign In */}
+          <button
+            onClick={handleGoogleLogin}
+            disabled={loading}
+            className="w-full bg-white border-2 border-gray-200 hover:border-gray-300 text-gray-700 font-semibold py-3 px-6 rounded-xl shadow hover:shadow-md transform hover:scale-[1.01] transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-3 mb-6"
+          >
+            <Chrome size={20} className="text-blue-500" />
+            Continue with Google
+          </button>
+
+          <div className="relative mb-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-4 bg-white text-gray-500">or sign in with email</span>
+            </div>
+          </div>
+
+          <form onSubmit={handleEmailLogin} className="space-y-5">
             {/* Email Input */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -105,7 +141,7 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-pink-400 focus:ring-4 focus:ring-pink-100 outline-none transition-all"
-                  placeholder="••••••••"
+                  placeholder="********"
                   required
                 />
               </div>

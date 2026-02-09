@@ -5,7 +5,7 @@ from typing import List, Dict
 from .. import schemas
 from .. import crud_supabase as crud
 from ..supabase_client import get_supabase_admin
-from ..dependencies_supabase import get_current_matcher
+from ..dependencies_supabase import require_role
 
 router = APIRouter(
     prefix="/api/events",
@@ -17,11 +17,11 @@ router = APIRouter(
 
 @router.get("", response_model=List[schemas.EventListResponse])
 def get_my_events(
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Get all events for the current matcher."""
-    events = crud.get_matcher_events(supabase, current_matcher['id'])
+    events = crud.get_matcher_events(supabase, current_user['id'])
 
     if not events:
         return []
@@ -51,7 +51,7 @@ def get_my_events(
 @router.get("/{event_id}", response_model=schemas.EventResponse)
 def get_event(
     event_id: str,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Get a specific event by ID."""
@@ -64,7 +64,7 @@ def get_event(
         )
 
     # Verify access
-    if event['creator_id'] != current_matcher['id']:
+    if event['creator_id'] != current_user['id']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this event"
@@ -94,12 +94,12 @@ def get_event_public(
 @router.post("", response_model=schemas.EventResponse, status_code=status.HTTP_201_CREATED)
 def create_event(
     event: schemas.EventCreate,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Create a new event."""
     event_data = event.model_dump()
-    db_event = crud.create_event(supabase, event_data, current_matcher['id'])
+    db_event = crud.create_event(supabase, event_data, current_user['id'])
     return db_event
 
 
@@ -107,7 +107,7 @@ def create_event(
 def update_event(
     event_id: str,
     event_update: schemas.EventUpdate,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Update an event."""
@@ -119,7 +119,7 @@ def update_event(
         )
 
     # Verify access
-    if event['creator_id'] != current_matcher['id']:
+    if event['creator_id'] != current_user['id']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this event"
@@ -133,7 +133,7 @@ def update_event(
 @router.delete("/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_event(
     event_id: str,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Delete an event."""
@@ -145,7 +145,7 @@ def delete_event(
         )
 
     # Verify access
-    if event['creator_id'] != current_matcher['id']:
+    if event['creator_id'] != current_user['id']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this event"

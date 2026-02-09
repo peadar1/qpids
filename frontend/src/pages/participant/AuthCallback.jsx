@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Heart } from 'lucide-react';
 import { supabase } from '../../services/supabase';
 
 /**
  * OAuth callback handler page.
  * Processes the OAuth redirect from Supabase Auth (Google, etc.)
- * and redirects the user to the participant portal.
+ * and redirects the user to the appropriate destination.
  */
 export default function AuthCallback() {
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     const handleCallback = async () => {
@@ -26,22 +27,27 @@ export default function AuthCallback() {
         }
 
         if (session) {
-          // Session exists - redirect to stored destination or default
-          // The ParticipantAuthContext will handle creating/fetching the user
-          const redirectUrl = sessionStorage.getItem('auth_redirect') || '/find';
+          // Session exists - get redirect destination
+          // Priority: 1) URL ?next= param, 2) sessionStorage, 3) default to /find
+          const nextParam = searchParams.get('next');
+          const storedRedirect = sessionStorage.getItem('auth_redirect');
+          const redirectUrl = nextParam || storedRedirect || '/find';
+
+          // Clean up
           sessionStorage.removeItem('auth_redirect');
+
+          // The AuthContext will automatically fetch the user when it detects the session
           navigate(redirectUrl);
         } else {
           // No session - check URL for error
-          const params = new URLSearchParams(window.location.search);
-          const errorParam = params.get('error');
-          const errorDescription = params.get('error_description');
+          const errorParam = searchParams.get('error');
+          const errorDescription = searchParams.get('error_description');
 
           if (errorParam) {
             setError(errorDescription || 'Authentication was cancelled or failed.');
           } else {
             // Try to exchange the code if present
-            const code = params.get('code');
+            const code = searchParams.get('code');
             if (code) {
               // Supabase should handle this automatically via the SDK
               // If we get here without a session, something went wrong
@@ -61,7 +67,7 @@ export default function AuthCallback() {
     };
 
     handleCallback();
-  }, [navigate]);
+  }, [navigate, searchParams]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-red-50 to-orange-50 flex items-center justify-center p-4">

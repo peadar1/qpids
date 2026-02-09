@@ -34,7 +34,7 @@ The application uses a dual-portal architecture:
 |-------|------------|
 | Backend | FastAPI 0.103.2, Python 3.11+ |
 | Database | Supabase (PostgreSQL) |
-| Auth | JWT (python-jose) + bcrypt + Supabase Auth (OAuth) |
+| Auth | Supabase Auth (Google OAuth + email/password) |
 | Frontend | React 19, Vite 7, Tailwind CSS 4 |
 | Icons | Lucide React |
 | Deployment | Render (backend) + Vercel (frontend) |
@@ -70,21 +70,21 @@ npm run preview  # Preview production build
 
 ### Backend Structure (`backend/app/`)
 - `main.py` - FastAPI app with CORS middleware, includes all routers prefixed with `/api/`
-- `auth.py` - JWT token creation/validation using python-jose, bcrypt password hashing
+- `auth.py` - Password hashing utilities (legacy, kept for reference)
 - `supabase_client.py` - Supabase admin client (bypasses RLS for server operations)
 - `crud_supabase.py` - All database operations organized by entity
 - `schemas.py` - Pydantic models with validation (Base/Create/Update/Response pattern per entity)
 - `dependencies_supabase.py` - Auth dependencies for both matchers and participants
 - `routers/` - API endpoints:
-  - **Organizer routes:**
-    - `auth_supabase.py` - Matcher signup, login
+  - **Auth routes:**
+    - `auth_supabase.py` - Unified auth endpoints (me, upgrade-to-matcher)
+  - **Organizer routes (require 'matcher' role):**
     - `events_supabase.py` - Event CRUD + public endpoints
     - `participants_supabase.py` - Participant management (organizer view)
     - `venues_supabase.py` - Venue management
     - `form_questions_supabase.py` - Form builder endpoints
     - `matches_supabase.py` - Match creation & management
-  - **Participant routes:**
-    - `participant_auth.py` - Participant signup, login (email + OAuth callback)
+  - **Participant routes (require 'participant' role):**
     - `events_public.py` - Public event browsing, access codes, my-events, my-matches
 
 ### Frontend Structure (`frontend/src/`)
@@ -94,6 +94,7 @@ npm run preview  # Preview production build
 /                           - Landing page (portal selection)
 /organizer/*               - Organizer portal
   /login, /signup          - Organizer authentication
+  /upgrade                 - Upgrade to organizer role
   /dashboard               - Overview with stats
   /events                  - Event list
   /events/create           - New event wizard
@@ -114,68 +115,60 @@ npm run preview  # Preview production build
 
 #### Key Files
 - `App.jsx` - Dual-portal route configuration with React Router
-- `context/AuthContext.jsx` - Organizer auth state (custom JWT)
-- `context/ParticipantAuthContext.jsx` - Participant auth state (Supabase Auth + custom JWT)
-- `services/api.js` - Axios instance with typed API objects
+- `context/AuthContext.jsx` - Unified auth state (Supabase session + role-based access)
+- `components/ProtectedRoute.jsx` - Unified route guards with role support (OrganizerRoute, ParticipantRoute)
+- `services/api.js` - Axios instance with automatic Supabase token injection
 - `services/supabase.js` - Supabase client for OAuth
-- `components/organizer/` - Organizer-specific components (Header, ProtectedRoute)
-- `components/participant/` - Participant-specific components (ProtectedRoute)
-- `pages/organizer/` - Organizer login/signup pages
+- `components/organizer/` - Organizer-specific components (Header)
+- `pages/organizer/` - Organizer login/signup/upgrade pages
 - `pages/participant/` - Participant portal pages
 - `pages/` - Shared pages (Dashboard, Events, etc.)
 
-### Authentication Flows
+### Authentication (Unified Supabase Auth)
 
-#### Organizer Authentication
-1. Organizer signs up/logs in via `/api/auth/signup` or `/api/auth/login`
-2. Backend returns custom JWT token + matcher data
-3. Frontend stores token in localStorage (`token` key)
-4. Protected routes use `get_current_matcher` dependency
+All users authenticate via Supabase Auth (Google OAuth or email/password). Backend validates Supabase JWT and manages roles in a unified `users` table.
 
-#### Participant Authentication (Unified Token Pattern)
+| Auth Method | Flow |
+|-------------|------|
+| Google OAuth | Frontend -> Supabase OAuth -> callback -> backend `/api/auth/me` creates/links user |
+| Email/Password | Frontend -> Supabase signUp/signIn -> backend `/api/auth/me` creates/links user |
 
-All participants use the same token format regardless of auth method:
+**Token:** Single Supabase access token stored in Supabase session (auto-managed by SDK).
 
-| Method | Initial Auth | Final Token Stored | Verification |
-|--------|--------------|-------------------|--------------|
-| Email/Password | Backend login | Custom JWT | Backend decodes JWT |
-| Google OAuth | Supabase OAuth | Custom JWT | Backend decodes JWT |
+**Roles:**
+- `participant` - Default role, can browse/register for events
+- `matcher` - Can create/manage events (users upgrade via `/organizer/upgrade`)
 
-**Email/Password Flow:**
-1. POST `/api/participant-auth/signup` or `/login`
-2. Backend creates custom JWT with `type: "participant"`
-3. Token stored in `localStorage.participant_token`
-4. Backend verifies by decoding JWT
+**Backend Dependencies:**
+- `get_current_user` - Validates Supabase JWT, returns user from `users` table
+- `require_role('matcher')` - Requires matcher role for organizer endpoints
+- `require_role('participant')` - Requires participant role for participant endpoints
 
-**Google OAuth Flow:**
-1. Frontend calls `signInWithGoogle()` -> Google redirect
-2. Callback to `/auth/callback` -> Supabase session created
-3. Frontend calls GET `/api/participant-auth/me` with Supabase token
-4. Backend verifies Supabase token, creates/retrieves ParticipantUser
-5. Backend returns **its own JWT** (not Supabase token)
-6. Frontend stores backend JWT in `localStorage.participant_token`
-7. TOKEN_REFRESHED events from Supabase are ignored (backend JWT has its own 7-day expiry)
-
-**Security Note:** Password hashes for email/password users are stored server-side in `profile_data` but are stripped from all API responses before returning to the client.
+**User Linking:** On first sign-in, backend:
+1. Finds user by `supabase_auth_id`
+2. Else finds by email and links the Supabase auth
+3. Else creates new user with `['participant']` role
 
 ### Data Model
 
 ```
-Matcher (organizer)
-  └── creates Events
-        ├── visibility (public/private)
-        ├── access_code (for private events)
-        ├── location, area (for event discovery)
-        ├── Participants (with form_answers JSON, required participant_user_id)
-        ├── FormQuestions (custom registration fields)
-        ├── Venues (date locations with capacity)
-        └── Matches (pairs of participants)
-
-ParticipantUser (authenticated participant account)
-  ├── supabase_auth_id (links to Supabase Auth for OAuth)
+Users (unified user accounts)
+  ├── supabase_auth_id (links to Supabase Auth)
   ├── email, name, phone_number, date_of_birth
-  ├── profile_data (JSON for additional user data; password_hash stored server-side only)
-  └── linked to Participants via participant_user_id
+  ├── roles TEXT[] (e.g., ['participant'] or ['participant', 'matcher'])
+  ├── profile_data JSONB
+  ├── legacy_matcher_id, legacy_participant_user_id (migration tracking)
+  └── can create Events (if matcher role)
+
+Events
+  ├── owner_user_id (references users.id)
+  ├── visibility (public/private)
+  ├── access_code (for private events)
+  ├── location, area (for event discovery)
+  ├── Participants (with form_answers JSON, participant_user_id)
+  ├── FormQuestions (custom registration fields)
+  ├── Venues (date locations with capacity)
+  └── Matches (pairs of participants)
 ```
 
 **Key Relationships:**
@@ -203,13 +196,11 @@ ParticipantUser (authenticated participant account)
 - `GET /api/public/events/{id}` - Get event (with optional access_code param)
 - `GET /api/public/areas` - Get available areas
 
-### Participant Auth Endpoints
-- `POST /api/participant-auth/signup` - Email/password signup
-- `POST /api/participant-auth/login` - Email/password login
-- `GET /api/participant-auth/me` - Get current participant (also creates from OAuth)
-- `PUT /api/participant-auth/me` - Update profile
-- `DELETE /api/participant-auth/me` - Delete account
-- `GET /api/participant-auth/debug-token` - Debug endpoint for token verification
+### Auth Endpoints (requires Supabase token)
+- `GET /api/auth/me` - Get/create current user (auto-creates on first login)
+- `PUT /api/auth/me` - Update user profile
+- `POST /api/auth/upgrade-to-matcher` - Add matcher role to current user
+- `GET /api/auth/check-matcher` - Check if current user has matcher role
 
 ### Participant Protected Endpoints (requires auth)
 - `POST /api/public/events/{id}/register` - Register for event
@@ -224,10 +215,7 @@ ParticipantUser (authenticated participant account)
 ```
 SUPABASE_URL=your_project_url
 SUPABASE_SERVICE_KEY=your_service_role_key
-SUPABASE_ANON_KEY=your_anon_key           # REQUIRED for OAuth token verification
-JWT_SECRET_KEY=your_jwt_secret            # Generate with: openssl rand -hex 32
-JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=10080         # 7 days
+SUPABASE_ANON_KEY=your_anon_key           # REQUIRED for Supabase JWT verification
 CORS_ORIGINS=http://localhost:5173,http://localhost:3000
 # Note: Vercel preview URLs (cupids-*.vercel.app) are allowed via regex pattern in main.py
 ```
@@ -249,6 +237,8 @@ Migration files are in `backend/migrations/`. Run in order in Supabase SQL Edito
 2. `002_add_event_visibility_fields.sql` - visibility, access_code, location, area columns
 3. `003_link_participants_to_users.sql` - participant_user_id foreign key
 4. `004_require_auth_for_registration.sql` - Updated RLS policy requiring authentication
+5. `005_create_unified_users.sql` - Unified users table with roles array
+6. `006_migrate_participant_users.sql` - Migrate existing OAuth users to unified table
 
 ## Deployment
 
@@ -256,7 +246,7 @@ Migration files are in `backend/migrations/`. Run in order in Supabase SQL Edito
 - Configuration in `render.yaml`
 - Runtime: Python 3.11
 - Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-- **Required env vars:** SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_ANON_KEY, JWT_SECRET_KEY
+- **Required env vars:** SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_ANON_KEY
 
 ### Frontend (Vercel)
 - Configuration in `vercel.json`

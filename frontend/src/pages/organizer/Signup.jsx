@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Heart, Mail, Lock, User, Sparkles } from 'lucide-react';
+import { Heart, Mail, Lock, User, Sparkles, Chrome } from 'lucide-react';
 
 /**
  * Signup page for event organizers/matchers.
- * Provides email/password registration for the organizer portal.
+ * Provides Google OAuth and email/password registration.
  */
 export default function Signup() {
   const [name, setName] = useState('');
@@ -14,10 +14,27 @@ export default function Signup() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { signup } = useAuth();
+  const { signInWithGoogle, signUpWithEmail, isAuthenticated, isMatcher } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
+  // Redirect if already logged in as matcher
+  if (isAuthenticated && isMatcher) {
+    navigate('/organizer/dashboard', { replace: true });
+  }
+
+  const handleGoogleSignup = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      await signInWithGoogle('/organizer/upgrade');
+      // OAuth redirects, so we don't need to do anything here
+    } catch (err) {
+      setError(err.message || 'Google sign-in failed');
+      setLoading(false);
+    }
+  };
+
+  const handleEmailSignup = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
@@ -28,12 +45,12 @@ export default function Signup() {
       return;
     }
 
-    const result = await signup(name, email, password);
-
-    if (result.success) {
-      navigate('/organizer/dashboard');
-    } else {
-      setError(result.error);
+    try {
+      await signUpWithEmail(email, password, { name, full_name: name });
+      // After signup, user needs to verify email or be redirected to upgrade
+      navigate('/organizer/upgrade');
+    } catch (err) {
+      setError(err.message || 'Signup failed');
     }
 
     setLoading(false);
@@ -81,7 +98,26 @@ export default function Signup() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Google Sign Up */}
+          <button
+            onClick={handleGoogleSignup}
+            disabled={loading}
+            className="w-full bg-white border-2 border-gray-200 hover:border-gray-300 text-gray-700 font-semibold py-3 px-6 rounded-xl shadow hover:shadow-md transform hover:scale-[1.01] transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-3 mb-6"
+          >
+            <Chrome size={20} className="text-blue-500" />
+            Continue with Google
+          </button>
+
+          <div className="relative mb-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-4 bg-white text-gray-500">or sign up with email</span>
+            </div>
+          </div>
+
+          <form onSubmit={handleEmailSignup} className="space-y-5">
             {/* Name Input */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -130,7 +166,7 @@ export default function Signup() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-pink-400 focus:ring-4 focus:ring-pink-100 outline-none transition-all"
-                  placeholder="••••••••"
+                  placeholder="********"
                   required
                 />
               </div>

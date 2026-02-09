@@ -16,7 +16,6 @@ from .routers import (
     participants_supabase as participants,
     form_questions_supabase as form_questions,
     matches_supabase as matches,
-    participant_auth,
     events_public
 )
 
@@ -57,7 +56,6 @@ app.include_router(form_questions.router)
 app.include_router(matches.router)
 
 # Include routers - Participant portal routes
-app.include_router(participant_auth.router)
 app.include_router(events_public.router)
 
 

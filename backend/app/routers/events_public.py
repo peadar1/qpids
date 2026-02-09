@@ -5,7 +5,7 @@ from typing import List, Dict, Optional
 from .. import schemas
 from .. import crud_supabase as crud
 from ..supabase_client import get_supabase_admin
-from ..dependencies_supabase import get_current_participant
+from ..dependencies_supabase import require_role
 
 router = APIRouter(
     prefix="/api/public",
@@ -80,7 +80,7 @@ def validate_access_code(
 
 @router.get("/events/my-events", response_model=List[schemas.ParticipantEventView])
 def get_my_events(
-    current_user: Dict = Depends(get_current_participant),
+    current_user: Dict = Depends(require_role('participant')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """
@@ -114,7 +114,7 @@ def get_my_events(
 
 @router.get("/events/my-matches", response_model=List[schemas.ParticipantMatchView])
 def get_my_matches(
-    current_user: Dict = Depends(get_current_participant),
+    current_user: Dict = Depends(require_role('participant')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """
@@ -181,7 +181,7 @@ def register_for_event(
     event_id: str,
     participant_data: schemas.ParticipantRegister,
     access_code: Optional[str] = Query(None, description="Access code for private events"),
-    current_user: Dict = Depends(get_current_participant),
+    current_user: Dict = Depends(require_role('participant')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """

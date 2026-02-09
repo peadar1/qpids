@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
+import { supabase } from './supabase';
 
 // Create axios instance
 const api = axios.create({
@@ -9,37 +10,21 @@ const api = axios.create({
   },
 });
 
-// Add auth token to requests based on route
-api.interceptors.request.use((config) => {
-  // Don't override explicitly-set Authorization headers (e.g., from withToken())
+// Single interceptor - use Supabase session token
+api.interceptors.request.use(async (config) => {
+  // Don't override explicitly-set Authorization headers
   if (config.headers.Authorization) {
     return config;
   }
 
-  // Route-based token selection to prevent organizer token from being used on participant routes
-  const isParticipantRoute = config.url?.includes('/participant-auth') ||
-                              config.url?.includes('/public/events');
-
-  if (isParticipantRoute) {
-    const participantToken = localStorage.getItem('participant_token');
-    if (participantToken) {
-      config.headers.Authorization = `Bearer ${participantToken}`;
-    }
-  } else {
-    const organizerToken = localStorage.getItem('token');
-    if (organizerToken) {
-      config.headers.Authorization = `Bearer ${organizerToken}`;
-    }
+  // Get current Supabase session
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.access_token) {
+    config.headers.Authorization = `Bearer ${session.access_token}`;
   }
 
   return config;
 });
-
-// Auth API calls
-export const authAPI = {
-  signup: (data) => api.post('/api/auth/signup', data),
-  login: (data) => api.post('/api/auth/login', data),
-};
 
 // Event API calls
 export const eventAPI = {
@@ -49,7 +34,7 @@ export const eventAPI = {
   create: (data) => api.post('/api/events', data),
   update: (id, data) => api.put(`/api/events/${id}`, data),
   delete: (id) => api.delete(`/api/events/${id}`),
-  
+
   // Public route (no auth required) - for participant registration
   getPublic: (id) => api.get(`/api/events/${id}/public`),
 };
@@ -63,11 +48,11 @@ export const venueAPI = {
   delete: (eventId, venueId) => api.delete(`/api/events/${eventId}/venues/${venueId}`),
 };
 
-// Participant API calls
+// Participant API calls (for organizers managing participants)
 export const participantAPI = {
-  // Public registration (no auth required)
+  // Registration (requires participant auth)
   register: (eventId, data) => api.post(`/api/events/${eventId}/participants/register`, data),
-  
+
   // Protected routes (for event organizers)
   getAll: (eventId) => api.get(`/api/events/${eventId}/participants`),
   getById: (eventId, participantId) => api.get(`/api/events/${eventId}/participants/${participantId}`),
@@ -83,7 +68,7 @@ export const formQuestionAPI = {
   update: (eventId, questionId, data) => api.put(`/api/events/${eventId}/form-questions/${questionId}`, data),
   delete: (eventId, questionId) => api.delete(`/api/events/${eventId}/form-questions/${questionId}`),
   reorder: (eventId, data) => api.put(`/api/events/${eventId}/form-questions/reorder`, data),
-  
+
   // Public route - get active questions for registration form
   getPublic: (eventId) => api.get(`/api/events/${eventId}/form-questions/public`),
 };
@@ -98,58 +83,7 @@ export const matchAPI = {
   generate: (eventId) => api.post(`/api/events/${eventId}/matches/generate`),
 };
 
-// ==================== PARTICIPANT PORTAL API ====================
-
-/**
- * Create an axios instance that uses a specific token.
- * Used for participant auth where token might come from Supabase.
- * @param {string} token - Bearer token to use
- * @returns {Object} Axios config with auth header
- */
-const withToken = (token) => ({
-  headers: { Authorization: `Bearer ${token}` }
-});
-
-// Participant Auth API calls
-export const participantAuthAPI = {
-  /**
-   * Sign up with email and password.
-   * @param {Object} data - { name, email, password }
-   */
-  signup: (data) => api.post('/api/participant-auth/signup', data),
-
-  /**
-   * Login with email and password.
-   * @param {Object} data - { email, password }
-   */
-  login: (data) => api.post('/api/participant-auth/login', data),
-
-  /**
-   * Get current participant profile.
-   * Uses provided token (for OAuth) or stored token (for email auth).
-   * @param {string} [token] - Optional bearer token
-   */
-  getMe: (token) => token
-    ? api.get('/api/participant-auth/me', withToken(token))
-    : api.get('/api/participant-auth/me'),
-
-  /**
-   * Update current participant profile.
-   * @param {Object} data - Profile fields to update
-   * @param {string} [token] - Optional bearer token
-   */
-  updateMe: (data, token) => token
-    ? api.put('/api/participant-auth/me', data, withToken(token))
-    : api.put('/api/participant-auth/me', data),
-
-  /**
-   * Delete current participant account.
-   * @param {string} [token] - Optional bearer token
-   */
-  deleteMe: (token) => token
-    ? api.delete('/api/participant-auth/me', withToken(token))
-    : api.delete('/api/participant-auth/me'),
-};
+// ==================== PUBLIC EVENTS API (Participant Portal) ====================
 
 // Public Events API calls (for participant portal)
 export const publicEventAPI = {
@@ -177,7 +111,7 @@ export const publicEventAPI = {
   }),
 
   /**
-   * Register for an event (supports both auth and anonymous).
+   * Register for an event (requires auth).
    * @param {string} eventId - Event UUID
    * @param {Object} data - Registration data
    * @param {string} [accessCode] - Optional access code for private events

@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from .. import schemas
 from .. import crud_supabase as crud
 from ..supabase_client import get_supabase_admin
-from ..dependencies_supabase import get_current_matcher
+from ..dependencies_supabase import require_role
 
 
 class MatchGenerateResponse(BaseModel):
@@ -24,7 +24,7 @@ router = APIRouter(
 @router.get("", response_model=List[schemas.MatchResponse])
 def get_matches(
     event_id: str,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Get all matches for an event."""
@@ -36,7 +36,7 @@ def get_matches(
             detail="Event not found"
         )
 
-    if event['creator_id'] != current_matcher['id']:
+    if event['creator_id'] != current_user['id']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this event"
@@ -50,13 +50,13 @@ def get_matches(
 def get_match(
     event_id: str,
     match_id: str,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Get a specific match by ID."""
     # Verify event access
     event = crud.get_event_by_id(supabase, event_id)
-    if not event or event['creator_id'] != current_matcher['id']:
+    if not event or event['creator_id'] != current_user['id']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this event"
@@ -76,20 +76,20 @@ def get_match(
 def create_match(
     event_id: str,
     match: schemas.MatchCreate,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Create a new match."""
     # Verify event access
     event = crud.get_event_by_id(supabase, event_id)
-    if not event or event['creator_id'] != current_matcher['id']:
+    if not event or event['creator_id'] != current_user['id']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this event"
         )
 
     match_data = match.model_dump()
-    db_match = crud.create_match(supabase, event_id, match_data, current_matcher['id'])
+    db_match = crud.create_match(supabase, event_id, match_data, current_user['id'])
     return db_match
 
 
@@ -98,13 +98,13 @@ def update_match(
     event_id: str,
     match_id: str,
     match_update: schemas.MatchUpdate,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Update a match."""
     # Verify event access
     event = crud.get_event_by_id(supabase, event_id)
-    if not event or event['creator_id'] != current_matcher['id']:
+    if not event or event['creator_id'] != current_user['id']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this event"
@@ -126,13 +126,13 @@ def update_match(
 def delete_match(
     event_id: str,
     match_id: str,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Delete a match."""
     # Verify event access
     event = crud.get_event_by_id(supabase, event_id)
-    if not event or event['creator_id'] != current_matcher['id']:
+    if not event or event['creator_id'] != current_user['id']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this event"
@@ -220,7 +220,7 @@ def _calculate_compatibility_score(p1: Dict, p2: Dict) -> int:
 @router.post("/generate", response_model=MatchGenerateResponse)
 def generate_matches(
     event_id: str,
-    current_matcher: Dict = Depends(get_current_matcher),
+    current_user: Dict = Depends(require_role('matcher')),
     supabase: Client = Depends(get_supabase_admin)
 ):
     """Generate matches for all unmatched participants based on preferences."""
@@ -232,7 +232,7 @@ def generate_matches(
             detail="Event not found"
         )
 
-    if event['creator_id'] != current_matcher['id']:
+    if event['creator_id'] != current_user['id']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this event"
@@ -299,7 +299,7 @@ def generate_matches(
                 'compatibility_score': best_score,
                 'notes': 'Auto-generated match'
             }
-            crud.create_match(supabase, event_id, match_data, current_matcher['id'])
+            crud.create_match(supabase, event_id, match_data, current_user['id'])
             matched_ids.add(p1['id'])
             matched_ids.add(best_match['id'])
             matches_created += 1

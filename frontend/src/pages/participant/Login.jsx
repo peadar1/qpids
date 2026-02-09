@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { useParticipantAuth } from '../../context/ParticipantAuthContext';
+import { useAuth } from '../../context/AuthContext';
 import { Heart, Mail, Lock, User, Sparkles } from 'lucide-react';
 
 /**
@@ -16,12 +16,17 @@ export default function ParticipantLogin() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { login, signup, loginWithGoogle } = useParticipantAuth();
+  const { signInWithGoogle, signInWithEmail, signUpWithEmail, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   // Get redirect URL from query params (default to /find)
   const redirectUrl = searchParams.get('redirect') || '/find';
+
+  // Redirect if already authenticated
+  if (isAuthenticated) {
+    navigate(redirectUrl, { replace: true });
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -34,15 +39,15 @@ export default function ParticipantLogin() {
       return;
     }
 
-    const result = isSignup
-      ? await signup(name, email, password)
-      : await login(email, password);
-
-    if (result.success) {
-      // Redirect to the original destination or default to /find
+    try {
+      if (isSignup) {
+        await signUpWithEmail(email, password, { name, full_name: name });
+      } else {
+        await signInWithEmail(email, password);
+      }
       navigate(redirectUrl);
-    } else {
-      setError(result.error);
+    } catch (err) {
+      setError(err.message || (isSignup ? 'Signup failed' : 'Login failed'));
     }
 
     setLoading(false);
@@ -52,18 +57,18 @@ export default function ParticipantLogin() {
     setError('');
     setLoading(true);
 
-    // Store redirect URL in sessionStorage for OAuth callback to use
-    if (redirectUrl && redirectUrl !== '/find') {
-      sessionStorage.setItem('auth_redirect', redirectUrl);
-    }
+    try {
+      // Store redirect URL in sessionStorage for OAuth callback to use
+      if (redirectUrl && redirectUrl !== '/find') {
+        sessionStorage.setItem('auth_redirect', redirectUrl);
+      }
 
-    const result = await loginWithGoogle();
-
-    if (!result.success) {
-      setError(result.error);
+      await signInWithGoogle(redirectUrl);
+      // On success, user is redirected to Google OAuth
+    } catch (err) {
+      setError(err.message || 'Google sign-in failed');
       setLoading(false);
     }
-    // On success, user is redirected to Google OAuth
   };
 
   return (
@@ -198,7 +203,7 @@ export default function ParticipantLogin() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-pink-400 focus:ring-4 focus:ring-pink-100 outline-none transition-all"
-                  placeholder="••••••••"
+                  placeholder="********"
                   required
                 />
               </div>
