@@ -1,6 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+from typing import Optional
 import os
 import logging
 
@@ -29,19 +30,18 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Get allowed CORS origins from environment variable
-cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000")
-allowed_origins = [origin.strip() for origin in cors_origins.split(",")]
+# Parse CORS_ORIGINS: comma-separated, whitespace-safe, drop empties
+cors_origins_raw = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000")
+allowed_origins = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]
 
-# Vercel preview pattern: matches cupids-<hash>-<username>.vercel.app
-# Adjust 'cupids' to your actual Vercel project name if different
-VERCEL_PREVIEW_REGEX = r"^https://cupids(-[a-z0-9]+)?(-[a-z0-9-]+)?\.vercel\.app$"
+# Optional regex for dynamic origins (e.g., Vercel preview deployments)
+cors_origin_regex: Optional[str] = os.getenv("CORS_ORIGIN_REGEX") or None
 
-# CORS middleware with configurable origins and Vercel preview support
+# CORS middleware with configurable origins and optional regex pattern
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex=VERCEL_PREVIEW_REGEX,
+    allow_origin_regex=cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -71,3 +71,13 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+
+@app.get("/debug/cors")
+def debug_cors(request: Request):
+    """Debug endpoint to verify CORS configuration."""
+    return {
+        "request_origin": request.headers.get("origin"),
+        "allowed_origins": allowed_origins,
+        "origin_regex": cors_origin_regex,
+    }

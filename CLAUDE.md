@@ -217,7 +217,7 @@ SUPABASE_URL=your_project_url
 SUPABASE_SERVICE_KEY=your_service_role_key
 SUPABASE_ANON_KEY=your_anon_key           # REQUIRED for Supabase JWT verification
 CORS_ORIGINS=http://localhost:5173,http://localhost:3000
-# Note: Vercel preview URLs (cupids-*.vercel.app) are allowed via regex pattern in main.py
+CORS_ORIGIN_REGEX=                        # Optional: regex for dynamic origins (e.g., Vercel previews)
 ```
 
 ### Frontend (.env)
